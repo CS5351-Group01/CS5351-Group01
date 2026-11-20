@@ -1,118 +1,93 @@
-# 六人组开局骨架
+# 网页版多轮对话代码修复代理
 
-给「6 人 + 周记录 + 最后要交工程证据」这类课程项目用。核心只有一件事：
-
-> **让"谁改了谁的文件"变成机器能判的事。**
-
-组长最大的成本不是写代码，是每周调解"你为什么动我的文件"。
-
----
-
-## 里面有什么
+一个在浏览器里用的自动改代码工具：上传一份有 bug 的 Python 文件，
+系统把它放进沙箱、调大模型生成修复、跑测试验证，不通过就带着失败信息再修一轮。
 
 ```text
-roles.json                          唯一配置点：谁管哪些路径、哪些方法
-.github/CODEOWNERS                  由生成器产出，不要手改
-.github/workflows/pr-ownership.yml  CI：每个 PR 自动查越权
-tools/check_pr_ownership.py         校验器本体（路径 glob + AST 方法级）
-tools/test_check_pr_ownership.py    校验器的回归测试（12 条）
-tools/list_main_methods.py          列出 main.py 里可归属的方法
-tools/render_codeowners.py          从 roles.json 生成 CODEOWNERS
-tools/init_week01.py                生成 6 份 Week 1 角色文件
-docs/SETUP.md                       开组清单，按顺序做
-docs/PR_OWNERSHIP.md                规则说明 + 事故记录表
-templates/role_week.md              成员每周证据模板
-templates/team_week.md              组长每周证据模板
-course_evidence/{A..F}/week01/      六份角色边界文件（已生成）
-course_evidence/team/week01/        团队分工说明
+上传 → 生成修复 → 沙箱应用 → 跑测试 → 通过？→ 交付
+                    ↑                    ↓ 否
+                    └──── 失败信息回灌 ───┘
 ```
 
----
+## 架构
+
+```text
+frontend/    浏览器里那一页（上传、状态轮询、结果显示）
+    ↓ HTTP
+app/         FastAPI：注册登录、JWT、文件存储、任务调度
+    ↓ 后台任务
+llm/         闭环修复：拼 prompt、调模型、解析回复、多轮重试
+    ↓ 调用
+sandbox/     把项目复制到临时目录，跑 pytest，跑完删掉
+    ↓ 依赖
+agent/       技能（ls/read/grep/write）、记忆、补丁落盘
+```
+
+四条边界很清楚：**前端只说话，后端只调度，llm 只决策，sandbox 只执行**。
+`agent/` 是前三者共用的小工具层。
 
 ## 六个人怎么分
 
-课程原定八个模块，合并成六个：
-
-| 角色 | 职责 | 合并自 |
+| 角色 | 负责 | 目录 |
 |---|---|---|
-| **A** | 接入与配置 | 原 A1 |
-| **B** | 主流程与集成 | 原 A2 |
-| **C** | 输入侧：需求解析 + 会话状态 | 原 B1 + B2 |
-| **D** | 现场与交付：调试快照 + 打包 | 原 C1 + C2 |
-| **E** | 沙箱 + JavaScript 检查 | 原 D1 |
-| **F** | 安全 + 质量 + 测试 | 原 D2 |
+| **A** | 接口、认证、数据、任务调度 | `app/**` |
+| **B** | Agent 核心：技能、记忆、补丁 | `agent/**` |
+| **C** | 沙箱与测试执行 | `sandbox/**` |
+| **D** | LLM 集成：客户端、Prompt、闭环 | `llm/**` |
+| **E** | 前端：上传、对话、结果可视化 | `frontend/**` |
+| **F** | 评估与实验：数据集、批量跑、指标 | `eval/**` |
 
-A 和 B 都碰 `main.py`，所以它们不按文件分、按**方法**分——
-这正是 `main_functions` 那套 AST 校验存在的理由。
+**目录即归属**，没有共享文件。组长独占 `docs/`、`tools/`、`.github/`、
+`examples/`、`tests/conftest.py`、`requirements.txt`、`run.py`。
 
-分得不均想调？改 `roles.json`，跑一次 `python tools/render_codeowners.py` 就行。
+规则写在 `roles.json` 里，CI 每个 PR 自动查，见 `docs/PR_OWNERSHIP.md`。
 
----
-
-## 怎么用
-
-**装好之后（见 `docs/SETUP.md`）**，日常只有两条命令：
+## 跑起来
 
 ```bash
-# 提交前自查，和 CI 同一套逻辑
-python tools/check_pr_ownership.py --base origin/main --head HEAD --branch course/a
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+pip install -r requirements.txt
 
-# 改完 roles.json 重新生成 CODEOWNERS
-python tools/render_codeowners.py
+python run.py
 ```
 
-开 PR 后等 `Check ownership` 变绿。
+打开 <http://127.0.0.1:8000>，注册一个账号，传一个 `.py` 文件。
 
----
+**没有模型 key 也能跑**：系统会退化成假模型（`llm/client.py` 里的 `FakeLLM`），
+它只会修示例项目里那两个预置 bug，用来跑通流程。
 
-## 为什么要这么麻烦
-
-因为「每人只改自己的东西」这句话，靠开会讲是不算数的。
-
-没装这套东西的组，典型走势是：
-
-```text
-Week 1–4   大家都很客气
-Week 5     第一个人发现要改别人的文件才能跑通 → 改了
-Week 6     第二个人也开始改 → 没人知道边界在哪了
-Week 7     组长开始每周看 diff → 看不过来
-Week 9+    冲突频发，全组时间花在扯皮上
-```
-
-装上之后，越权在 PR 阶段就红了，**而且报错直接告诉你是谁的东西**：
-
-```text
-所有权检查失败：
-
-  - course_evidence/team/week01/evil.md 是组长的保留路径（`course_evidence/team/**`），成员分支不能改。
-  - main.py::<module-level> 改到了模块级代码（import / 常量 / 顶层语句），任何角色都不拥有。
-
-OWNERSHIP CHECK FAIL changed=2 violations=2
-```
-
----
-
-## 三条纪律
-
-1. **组长一个人 Admin，其余全部 Write。**
-   给了 Admin，谁都能关掉 branch protection、直推 main，前面全白搭。
-
-2. **规则只有 `roles.json` 一个来源。**
-   要加公共目录、要改归属，开 PR 改这个文件，别私下 `git add -f`。
-
-3. **每周必须有一个非纯文档产物。**
-   测试、脚本、配置、源码改动之一。四周全是 Markdown 是不合格的——
-   而证据里写了 `PASS` 的，必须真的能敲命令复现。
-
----
-
-## 验收
+要接真模型：
 
 ```bash
-python tools/test_check_pr_ownership.py
+set LLM_API_KEY=sk-xxx
+set LLM_BASE_URL=https://api.deepseek.com/v1
+set LLM_MODEL=deepseek-chat
 ```
 
-应该看到 `12/12 通过`。
+## 跑测试
 
-然后按 `docs/SETUP.md` 第 8 步，**故意开一个越权 PR 看它是不是红的**。
-两个方向都验过，这套东西才算真的生效。
+```bash
+python -m pytest tests -q                     # 全部
+python -m pytest tests/roles/a -q             # 只跑 A 的
+python -m eval.run_experiments                # 闭环实验，输出对照表
+```
+
+## 示例项目
+
+`examples/broken_project/` 是一个故意写坏的小模块（`add` 返回减法、`last_item` 越界）。
+它是全组的公共靶子：C 拿它测沙箱，D 拿它测闭环，F 拿它做实验。
+
+因为好几个角色都要用，所以**它归组长管**，别人不要改——改坏了同时影响三个人的测试。
+
+## 每周节奏
+
+| 阶段 | 周 | 每个人干什么 |
+|---|---|---|
+| 摸清边界 | 1–4 | 只写 `course_evidence/<角色>/weekNN/*.md`，不动代码 |
+| Sprint 1 | 5 | 每个角色一个可执行测试 + 第一次 PR |
+| Sprint 2 | 6–9 | 补边界/失败路径测试，或做真实改进 |
+| Sprint 3 | 10–13 | 第二轮改进、回归、答辩材料、最终 PR |
+
+每一周都要有一个**不是 Markdown** 的产物。写了 `PASS` 就必须能敲命令复现，
+没跑过的写 `NOT_RUN`。

@@ -279,8 +279,14 @@ def check(
     if branch_role and not branch_role.configured_owner:
         warnings.append(f"角色 {branch_role.id} 还没在 roles.json 里填 github，跳过提交人核对。")
 
+    # 组长分支（main / ops/*）：只核对提交人，不限制路径。
+    # 组长是集成者，合并冲突、搭骨架、改公共夹具都要靠他。
+    privileged = is_main or is_ops
+
     for status, path in changes:
         if path in rules.shared_modules:
+            if privileged:
+                continue
             level = "新增" if status == "A" else "删除" if status == "D" else "修改"
             violations_symbols: list[str] = []
             symbols = changed_symbols(file_at(base, path, cwd), file_at(head, path, cwd))
@@ -309,12 +315,13 @@ def check(
             continue
 
         reserved_hit = [p for p in rules.reserved if path_matches(path, p)]
-        if reserved_hit:
-            if is_main or is_ops:
-                continue
+        if reserved_hit and not privileged:
             violations.append(
                 f"{path} 是组长的保留路径（`{reserved_hit[0]}`），成员分支不能改。"
             )
+            continue
+
+        if privileged:
             continue
 
         owners = rules.role_for_path(path)
