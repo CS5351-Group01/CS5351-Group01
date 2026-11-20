@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -19,8 +20,14 @@ def resolve_within(root: Path, relative: str) -> Path:
     """把相对路径解析到 root 下；试图越界直接抛异常。"""
     root = Path(root).resolve()
     candidate = (root / (relative or ".")).resolve()
-    if candidate != root and root not in candidate.parents:
-        raise PermissionError(f"路径越界：{relative}")
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        # Windows 下大小写不敏感、Path 比较敏感，补一层 normcase 兜底
+        root_s = os.path.normcase(str(root)).rstrip("\\/")
+        cand_s = os.path.normcase(str(candidate))
+        if cand_s != root_s and not cand_s.startswith(root_s + os.sep):
+            raise PermissionError(f"路径越界：{relative}") from None
     return candidate
 
 
