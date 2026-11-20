@@ -1,0 +1,55 @@
+name: Ownership guard
+
+# 为什么用 pull_request_target 而不是 pull_request：
+# 前者在 base 分支的上下文里跑，仓库 secrets 可用；后者在 PR 的代码上下文里跑。
+# 关键纪律是——**只读 PR 的文件路径，绝不执行 PR 提交的任何代码**：
+#   · checkout 的是 base SHA
+#   · PR 的 head 只作为数据 fetch 进来（`refs/pull/N/head`）
+#   · 校验脚本只做 git diff 和 AST 分析，不 import、不 run
+# 这条守住了，pull_request_target 就是安全的。
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ownership-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ownership:
+    name: Check ownership
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted base (never execute PR code)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+
+      - name: Fetch PR head as data only
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags origin "+refs/pull/$PR_NUMBER/head:refs/remotes/origin/pr-check-$PR_NUMBER"
+          test "$(git rev-parse "refs/remotes/origin/pr-check-$PR_NUMBER")" = "$PR_HEAD_SHA"
+
+      - name: Enforce paths and shared-module ownership
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          python3 tools/check_pr_ownership.py \
+            --base "$BASE_SHA" \
+            --head "refs/remotes/origin/pr-check-$PR_NUMBER" \
+            --branch "$PR_BRANCH" \
+            --author "$PR_AUTHOR"
