@@ -4,6 +4,7 @@
 course_evidence/team/** @vfanss
 docs/** @vfanss
 tools/** @vfanss
+scripts/** @vfanss
 .github/** @vfanss
 examples/** @vfanss
 tests/conftest.py @vfanss
@@ -13,38 +14,32 @@ requirements.txt @vfanss
 run.py @vfanss
 roles.json @vfanss
 
-# TODO: 角色 A（后端：接口、认证、数据、任务调度）还没填 github
-# A — 后端：接口、认证、数据、任务调度
-app/** @role-a
-course_evidence/A/** @role-a
-tests/roles/a/** @role-a
+# TODO: 角色 A（后端：接口、认证、数据、任务调度）还没填 github，下面几行先注释掉，填好后重新生成
+# app/**
+# course_evidence/A/**
+# tests/roles/a/**
 
-# TODO: 角色 B（Agent 核心：技能、记忆、补丁）还没填 github
-# B — Agent 核心：技能、记忆、补丁
-agent/** @role-b
-course_evidence/B/** @role-b
-tests/roles/b/** @role-b
+# TODO: 角色 B（Agent 核心：技能、记忆、补丁）还没填 github，下面几行先注释掉，填好后重新生成
+# agent/**
+# course_evidence/B/**
+# tests/roles/b/**
 
-# TODO: 角色 C（沙箱与测试执行）还没填 github
-# C — 沙箱与测试执行
-sandbox/** @role-c
-course_evidence/C/** @role-c
-tests/roles/c/** @role-c
+# TODO: 角色 C（沙箱与测试执行）还没填 github，下面几行先注释掉，填好后重新生成
+# sandbox/**
+# course_evidence/C/**
+# tests/roles/c/**
 
-# TODO: 角色 D（LLM 集成：客户端、Prompt、闭环修复）还没填 github
-# D — LLM 集成：客户端、Prompt、闭环修复
-llm/** @role-d
-course_evidence/D/** @role-d
-tests/roles/d/** @role-d
+# TODO: 角色 D（LLM 集成：客户端、Prompt、闭环修复）还没填 github，下面几行先注释掉，填好后重新生成
+# llm/**
+# course_evidence/D/**
+# tests/roles/d/**
 
-# TODO: 角色 E（前端：上传、对话、结果可视化）还没填 github
-# E — 前端：上传、对话、结果可视化
-frontend/** @role-e
-course_evidence/E/** @role-e
-tests/roles/e/** @role-e
+# TODO: 角色 E（前端：上传、对话、结果可视化）还没填 github，下面几行先注释掉，填好后重新生成
+# frontend/**
+# course_evidence/E/**
+# tests/roles/e/**
 
-# TODO: 角色 F（评估与实验：数据集、批量跑、指标）还没填 github
-# F — 评估与实验：数据集、批量跑、指标
-eval/** @role-f
-course_evidence/F/** @role-f
-tests/roles/f/** @role-f
+# TODO: 角色 F（评估与实验：数据集、批量跑、指标）还没填 github，下面几行先注释掉，填好后重新生成
+# eval/**
+# course_evidence/F/**
+# tests/roles/f/**

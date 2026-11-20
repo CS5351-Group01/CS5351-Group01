@@ -15,6 +15,7 @@
       "course_evidence/team/**",
       "docs/**",
       "tools/**",
+      "scripts/**",
       ".github/**",
       "examples/**",
       "tests/conftest.py",
