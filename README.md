@@ -44,25 +44,51 @@ agent/       技能（ls/read/grep/write）、记忆、补丁落盘
 
 ## 跑起来
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate          # Windows
-pip install -r requirements.txt
+**一条命令搞定**（建虚拟环境、装依赖、跑测试，全自动）：
 
-python run.py
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+```
+
+看到 `46 passed` 就是好了。
+
+<details>
+<summary>想手动来？点开看（注意：分号不能省，两行粘成一行会报错）</summary>
+
+```powershell
+cd 仓库目录
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pytest tests -q
+```
+
+**不要用 `activate`** —— 会被 PowerShell 执行策略拦住。
+直接调 `.venv\Scripts\python.exe` 就绕开了。
+
+如果 pip 卡住，换国内镜像：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+</details>
+
+### 启动服务
+
+```powershell
+.\.venv\Scripts\python.exe run.py
 ```
 
 打开 <http://127.0.0.1:8000>，注册一个账号，传一个 `.py` 文件。
 
 **没有模型 key 也能跑**：系统会退化成假模型（`llm/client.py` 里的 `FakeLLM`），
-它只会修示例项目里那两个预置 bug，用来跑通流程。
+它只会修 `examples/` 里那五个预置 bug，用来跑通流程。
 
 要接真模型：
 
-```bash
-set LLM_API_KEY=sk-xxx
-set LLM_BASE_URL=https://api.deepseek.com/v1
-set LLM_MODEL=deepseek-chat
+```powershell
+$env:LLM_API_KEY  = "sk-xxx"
+$env:LLM_BASE_URL = "https://api.deepseek.com/v1"
+$env:LLM_MODEL    = "deepseek-chat"
 ```
 
 ## 跑测试
