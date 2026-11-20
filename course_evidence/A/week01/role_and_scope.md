@@ -7,17 +7,13 @@ WEEK1_START
 
 ## 职责
 
-接入与配置
+后端：接口、认证、数据、任务调度
 
-对应课程原始模块：原 A1：元数据 / 配置 / 环境
+对应课程原始模块：参考项目的 Backend Lead / Backend Developer
 
 ## 负责的文件
 
-- `metadata.yaml`
-- `_conf_schema.json`
-- `pyproject.toml`
-- `LICENSE`
-- `.astrbot-plugin/**`
+- `app/**`
 - `course_evidence/A/**`
 - `tests/roles/a/**`
 

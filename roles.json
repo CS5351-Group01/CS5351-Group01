@@ -3,109 +3,110 @@
     "单一事实源：所有所有权规则都从这里读。",
     "改这个文件之后跑 `python tools/render_codeowners.py`，CODEOWNERS 会自动重写。",
     "paths 是 glob，** 表示跨任意层目录。",
-    "main_functions 只对 main.py 生效：按函数/方法名做 AST 比对，不看行号。",
-    "不确定 main.py 里有哪些方法时，先跑 `python tools/list_main_methods.py <路径>`。"
+    "本项目按「目录」分角色，六个角色各占一层，互不重叠。",
+    "shared_modules 留空：没有跨角色共享的模块，文件归属即角色归属。"
   ],
 
-  "version": 1,
+  "version": 2,
 
   "leader": {
-    "github": "PUT-YOUR-GITHUB-NAME",
+    "github": "vfanss",
     "reserved": [
       "course_evidence/team/**",
       "docs/**",
       "tools/**",
       ".github/**",
+      "examples/**",
+      "tests/conftest.py",
       "README.md",
       ".gitignore",
+      "requirements.txt",
+      "run.py",
       "roles.json"
     ],
-    "note": "这些路径只有组长能改。组长的分支只能是 main 或 ops/*。"
+    "note": "这些路径只有组长能改。理由：examples/ 与 conftest.py 是多个角色共用的测试夹具，改它会同时影响别人的测试。"
   },
+
+  "shared_modules": [],
 
   "roles": [
     {
       "id": "A",
-      "title": "接入与配置",
-      "legacy": "原 A1：元数据 / 配置 / 环境",
+      "title": "后端：接口、认证、数据、任务调度",
+      "legacy": "参考项目的 Backend Lead / Backend Developer",
       "github": "PUT-GITHUB-NAME",
       "paths": [
-        "metadata.yaml",
-        "_conf_schema.json",
-        "pyproject.toml",
-        "LICENSE",
-        ".astrbot-plugin/**",
+        "app/**",
         "course_evidence/A/**",
         "tests/roles/a/**"
       ],
-      "main_functions": []
+      "main_functions": [],
+      "note": "app/ 整层归 A。包括路由、JWT、ORM、存储、后台任务。"
     },
     {
       "id": "B",
-      "title": "主流程与集成",
-      "legacy": "原 A2：AstrBot 集成 / 主流程",
+      "title": "Agent 核心：技能、记忆、补丁",
+      "legacy": "参考项目的 Agent Core Engineer",
       "github": "PUT-GITHUB-NAME",
       "paths": [
-        "skills/CodeAgent/SKILL.md",
+        "agent/**",
         "course_evidence/B/**",
         "tests/roles/b/**"
       ],
       "main_functions": [],
-      "note": "main.py 里的编排方法填到 main_functions；main.py 其余部分由 A 管。"
+      "note": "agent/ 整层归 B。技能接口一旦定下，其他角色按它调用，不要私自加签名。"
     },
     {
       "id": "C",
-      "title": "输入侧：需求解析与会话状态",
-      "legacy": "原 B1 需求解析/分类 + 原 B2 Session/State",
+      "title": "沙箱与测试执行",
+      "legacy": "参考项目的 Sandbox & Testing Engineer",
       "github": "PUT-GITHUB-NAME",
       "paths": [
+        "sandbox/**",
         "course_evidence/C/**",
-        "tests/roles/c/**",
-        "course_tools/c/**"
+        "tests/roles/c/**"
       ],
       "main_functions": [],
-      "note": "Week 1–4 只写 evidence 与测试；确认要改生产代码时，先把路径加到 paths。"
+      "note": "sandbox/ 整层归 C。核心承诺：永远不改原目录，所有试错在副本里。"
     },
     {
       "id": "D",
-      "title": "现场与交付：调试快照与打包",
-      "legacy": "原 C1 Debug/Snapshot/Rollback + 原 C2 Packager/Delivery",
+      "title": "LLM 集成：客户端、Prompt、闭环修复",
+      "legacy": "参考项目的 LLM Integration Engineer",
       "github": "PUT-GITHUB-NAME",
       "paths": [
-        "skills/CodeAgent/scripts/codeagent_packager.py",
+        "llm/**",
         "course_evidence/D/**",
-        "tests/roles/d/**",
-        "course_tools/d/**"
+        "tests/roles/d/**"
       ],
-      "main_functions": []
+      "main_functions": [],
+      "note": "llm/ 整层归 D。换模型只改 client.py，不要动调用方。"
     },
     {
       "id": "E",
-      "title": "沙箱与 JavaScript 检查",
-      "legacy": "原 D1：Sandbox / JavaScript Checker",
+      "title": "前端：上传、对话、结果可视化",
+      "legacy": "参考项目的 Team Leader / Frontend + Frontend Developer",
       "github": "PUT-GITHUB-NAME",
       "paths": [
-        "skills/CodeAgent/scripts/codeagent_sandbox.py",
-        "skills/CodeAgent/scripts/codeagent_js_checker.js",
-        "skills/CodeAgent/scripts/package.json",
+        "frontend/**",
         "course_evidence/E/**",
-        "tests/roles/e/**",
-        "course_tools/e/**"
+        "tests/roles/e/**"
       ],
-      "main_functions": []
+      "main_functions": [],
+      "note": "frontend/ 整层归 E。只调 A 的接口，不要绕过接口直接算。"
     },
     {
       "id": "F",
-      "title": "安全、质量与测试",
-      "legacy": "原 D2：Security / Quality / Testing",
+      "title": "评估与实验：数据集、批量跑、指标",
+      "legacy": "参考项目的 Evaluation & Experiment Engineer",
       "github": "PUT-GITHUB-NAME",
       "paths": [
-        "skills/CodeAgent/scripts/codeagent_security.py",
+        "eval/**",
         "course_evidence/F/**",
-        "tests/roles/f/**",
-        "course_tools/f/**"
+        "tests/roles/f/**"
       ],
-      "main_functions": []
+      "main_functions": [],
+      "note": "eval/ 整层归 F。跑实验要留可复现的命令和真实输出。"
     }
   ]
 }

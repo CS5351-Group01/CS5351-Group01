@@ -7,13 +7,13 @@ WEEK1_START
 
 ## 职责
 
-主流程与集成
+Agent 核心：技能、记忆、补丁
 
-对应课程原始模块：原 A2：AstrBot 集成 / 主流程
+对应课程原始模块：参考项目的 Agent Core Engineer
 
 ## 负责的文件
 
-- `skills/CodeAgent/SKILL.md`
+- `agent/**`
 - `course_evidence/B/**`
 - `tests/roles/b/**`
 
