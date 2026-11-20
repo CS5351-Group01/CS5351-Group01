@@ -40,9 +40,26 @@ def discover_cases() -> list[Path]:
     )
 
 
+def pick_target(case: Path) -> str | None:
+    """用例根目录下唯一那个 .py（conftest.py 除外）就是待修文件。"""
+    candidates = [
+        item.name for item in case.iterdir()
+        if item.is_file() and item.suffix == ".py" and item.name != "conftest.py"
+    ]
+    return candidates[0] if len(candidates) == 1 else None
+
+
 def run_case(case: Path, client, max_iters: int) -> CaseResult:
-    target = "calc.py"
     started = time.perf_counter()
+    target = pick_target(case)
+    if target is None:
+        return CaseResult(
+            case=case.name,
+            success=False,
+            iterations=0,
+            duration_s=0.0,
+            message="找不到唯一的待修文件",
+        )
     outcome = repair_project(case, target, max_iters=max_iters, client=client)
     return CaseResult(
         case=case.name,

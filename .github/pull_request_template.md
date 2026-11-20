@@ -4,9 +4,10 @@
 
 ## 自查
 
-- [ ] 我只改了自己角色 `paths` 里的文件
-- [ ] 如果改了 `main.py`，只碰了 `main_functions` 里属于我的方法
+- [ ] 我只改了自己角色目录下的文件（`app/` `agent/` `sandbox/` `llm/` `frontend/` `eval/`）
+- [ ] 我没改 `examples/`、`tests/conftest.py`、`requirements.txt` 这些公共文件
 - [ ] 本地跑过 `python tools/check_pr_ownership.py` 并且是绿的
+- [ ] 我这一层的测试单独跑是全绿的：`python -m pytest tests/roles/<我的字母> -q`
 - [ ] 所有写了 `PASS` 的地方都有真实命令和真实输出
 - [ ] 没跑的东西写了 `NOT_RUN`
 
