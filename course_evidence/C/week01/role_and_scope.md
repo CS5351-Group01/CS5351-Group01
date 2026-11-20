@@ -7,15 +7,15 @@ WEEK1_START
 
 ## 职责
 
-输入侧：需求解析与会话状态
+沙箱与测试执行
 
-对应课程原始模块：原 B1 需求解析/分类 + 原 B2 Session/State
+对应课程原始模块：参考项目的 Sandbox & Testing Engineer
 
 ## 负责的文件
 
+- `sandbox/**`
 - `course_evidence/C/**`
 - `tests/roles/c/**`
-- `course_tools/c/**`
 
 ## 边界
 

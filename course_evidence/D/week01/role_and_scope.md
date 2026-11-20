@@ -7,16 +7,15 @@ WEEK1_START
 
 ## 职责
 
-现场与交付：调试快照与打包
+LLM 集成：客户端、Prompt、闭环修复
 
-对应课程原始模块：原 C1 Debug/Snapshot/Rollback + 原 C2 Packager/Delivery
+对应课程原始模块：参考项目的 LLM Integration Engineer
 
 ## 负责的文件
 
-- `skills/CodeAgent/scripts/codeagent_packager.py`
+- `llm/**`
 - `course_evidence/D/**`
 - `tests/roles/d/**`
-- `course_tools/d/**`
 
 ## 边界
 

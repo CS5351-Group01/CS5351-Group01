@@ -7,18 +7,15 @@ WEEK1_START
 
 ## 职责
 
-沙箱与 JavaScript 检查
+前端：上传、对话、结果可视化
 
-对应课程原始模块：原 D1：Sandbox / JavaScript Checker
+对应课程原始模块：参考项目的 Team Leader / Frontend + Frontend Developer
 
 ## 负责的文件
 
-- `skills/CodeAgent/scripts/codeagent_sandbox.py`
-- `skills/CodeAgent/scripts/codeagent_js_checker.js`
-- `skills/CodeAgent/scripts/package.json`
+- `frontend/**`
 - `course_evidence/E/**`
 - `tests/roles/e/**`
-- `course_tools/e/**`
 
 ## 边界
 

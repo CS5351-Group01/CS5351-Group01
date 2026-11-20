@@ -1,4 +1,11 @@
 __pycache__/
 *.pyc
+.pytest_cache/
 .venv/
 node_modules/
+
+# 运行时产物
+app.db
+*.db
+storage/
+.llm_replies/

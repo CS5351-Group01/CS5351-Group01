@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>代码修复代理</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --text:#e6e9ef; --muted:#8b93a3; --accent:#4f8cff; --ok:#3fb950; --bad:#f85149; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  main { max-width:960px; margin:0 auto; padding:24px; display:grid; gap:16px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:20px; }
+  .panel h2 { margin:0 0 12px; font-size:14px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+  label { display:block; margin-bottom:10px; }
+  label span { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  input, button { font:inherit; }
+  input[type=email], input[type=password] { width:100%; padding:8px 10px; background:#0d1016; border:1px solid var(--line); border-radius:6px; color:var(--text); }
+  button { padding:8px 16px; border:0; border-radius:6px; background:var(--accent); color:#fff; cursor:pointer; font-weight:500; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .muted { color:var(--muted); }
+  .badge { padding:2px 8px; border-radius:99px; font-size:12px; border:1px solid var(--line); }
+  .badge.success { color:var(--ok); border-color:var(--ok); }
+  .badge.failed  { color:var(--bad); border-color:var(--bad); }
+  .badge.running { color:var(--accent); border-color:var(--accent); }
+  pre { background:#0d1016; border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto; max-height:420px; margin:12px 0 0; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🐞 代码修复代理</h1>
+  <div class="row">
+    <span id="who" class="muted"></span>
+    <button id="logout" class="ghost hidden">退出</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- 登录 / 注册 -->
+  <section class="panel" id="auth">
+    <h2>账号</h2>
+    <div class="row">
+      <label style="flex:1">
+        <span>邮箱</span>
+        <input type="email" id="email" placeholder="you@example.com" autocomplete="username">
+      </label>
+      <label style="flex:1">
+        <span>密码（至少 6 位）</span>
+        <input type="password" id="password" placeholder="••••••" autocomplete="current-password">
+      </label>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button id="login">登录</button>
+      <button id="register" class="ghost">注册</button>
+      <span id="auth-msg" class="muted"></span>
+    </div>
+  </section>
+
+  <!-- 上传 -->
+  <section class="panel hidden" id="upload-panel">
+    <h2>上传要修的代码</h2>
+    <div class="row">
+      <input type="file" id="file" accept=".py">
+      <button id="submit">开始修复</button>
+      <span id="upload-msg" class="muted"></span>
+    </div>
+  </section>
+
+  <!-- 结果 -->
+  <section class="panel hidden" id="result-panel">
+    <h2>修复过程</h2>
+    <div class="row">
+      <span class="muted">状态</span>
+      <span id="status" class="badge">—</span>
+      <span class="muted">轮数</span>
+      <span id="iters">—</span>
+      <span id="task-msg" class="muted"></span>
+    </div>
+    <pre id="output" class="hidden"></pre>
+  </section>
+
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let token = localStorage.getItem("token") || "";
+
+function setToken(next) {
+  token = next || "";
+  if (token) localStorage.setItem("token", token);
+  else localStorage.removeItem("token");
+  render();
+}
+
+function setMsg(el, text, bad) {
+  el.textContent = text;
+  el.style.color = bad ? "var(--bad)" : "var(--muted)";
+}
+
+async function api(path, options = {}) {
+  const headers = options.headers || {};
+  if (token) headers["Authorization"] = "Bearer " + token;
+  const res = await fetch(path, { ...options, headers });
+  if (res.status === 401) { setToken(""); throw new Error("请先登录"); }
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch (e) {}
+    throw new Error(detail);
+  }
+  return res.headers.get("content-type", "").includes("json") ? res.json() : res.text();
+}
+
+function render() {
+  const loggedIn = Boolean(token);
+  $("auth").classList.toggle("hidden", loggedIn);
+  $("upload-panel").classList.toggle("hidden", !loggedIn);
+  $("logout").classList.toggle("hidden", !loggedIn);
+  if (!loggedIn) { $("who").textContent = ""; $("result-panel").classList.add("hidden"); }
+}
+
+async function refreshMe() {
+  if (!token) return;
+  try {
+    const me = await api("/auth/me");
+    $("who").textContent = me.email;
+  } catch (e) { setToken(""); }
+}
+
+async function auth(endpoint) {
+  const email = $("email").value.trim();
+  const password = $("password").value;
+  if (!email || password.length < 6) return setMsg($("auth-msg"), "邮箱和至少 6 位密码", true);
+  try {
+    if (endpoint === "register") {
+      await api("/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+    }
+    const data = await api("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    setToken(data.access_token);
+    setMsg($("auth-msg"), "");
+    refreshMe();
+  } catch (e) { setMsg($("auth-msg"), e.message, true); }
+}
+
+async function submit() {
+  const file = $("file").files[0];
+  if (!file) return setMsg($("upload-msg"), "先选一个 .py 文件", true);
+
+  const form = new FormData();
+  form.append("file", file);
+  setMsg($("upload-msg"), "上传中…");
+  try {
+    const task = await api("/tasks", { method: "POST", body: form });
+    setMsg($("upload-msg"), "已创建任务 #" + task.id);
+    $("result-panel").classList.remove("hidden");
+    poll(task.id);
+  } catch (e) { setMsg($("upload-msg"), e.message, true); }
+}
+
+function paint(task) {
+  const status = $("status");
+  status.textContent = task.status;
+  status.className = "badge " + task.status;
+  $("iters").textContent = task.iterations || "—";
+  $("task-msg").textContent = task.message || "";
+  if (task.result) {
+    $("output").classList.remove("hidden");
+    $("output").textContent = task.result;
+  }
+}
+
+async function poll(id) {
+  let attempts = 0;
+  while (attempts++ < 120) {
+    try {
+      const task = await api("/tasks/" + id);
+      paint(task);
+      if (task.status === "success" || task.status === "failed") return;
+    } catch (e) { setMsg($("upload-msg"), e.message, true); return; }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  setMsg($("upload-msg"), "等待超时", true);
+}
+
+$("login").onclick = () => auth("login");
+$("register").onclick = () => auth("register");
+$("submit").onclick = submit;
+$("logout").onclick = () => setToken("");
+$("password").addEventListener("keydown", (e) => { if (e.key === "Enter") auth("login"); });
+
+render();
+refreshMe();
+</script>
+</body>
+</html>

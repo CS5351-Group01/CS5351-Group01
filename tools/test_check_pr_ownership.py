@@ -183,6 +183,13 @@ def _(root: Path) -> None:
     commit(root, "chore: scaffold")
 
 
+@case("组长用 ops 分支合并角色目录（集成）", "ops/scaffold", "lead", 0)
+def _(root: Path) -> None:
+    write(root, "course_evidence/B/week01/role_and_scope.md", "# B 的改动\n")
+    write(root, "tests/roles/b/test_new.py", "def test_ok():\n    assert True\n")
+    commit(root, "chore: integrate B")
+
+
 @case("非组长用 ops 分支", "ops/scaffold", "alice", 1)
 def _(root: Path) -> None:
     write(root, "README.md", "# 冒名\n")

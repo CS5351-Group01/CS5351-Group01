@@ -7,16 +7,15 @@ WEEK1_START
 
 ## 职责
 
-安全、质量与测试
+评估与实验：数据集、批量跑、指标
 
-对应课程原始模块：原 D2：Security / Quality / Testing
+对应课程原始模块：参考项目的 Evaluation & Experiment Engineer
 
 ## 负责的文件
 
-- `skills/CodeAgent/scripts/codeagent_security.py`
+- `eval/**`
 - `course_evidence/F/**`
 - `tests/roles/f/**`
-- `course_tools/f/**`
 
 ## 边界
 
