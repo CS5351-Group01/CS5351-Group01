@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -18,6 +19,23 @@ MAX_FILES = 5_000
 MAX_TOTAL_BYTES = 50_000_000
 
 
+def is_within(root: Path, candidate: Path) -> bool:
+    """candidate 是否在 root 里面。
+
+    两个路径都应已 resolve()。仍然再兜一层：
+    Windows 下大小写不敏感，而 Path 比较是敏感的，直接用 relative_to
+    在极端情况下会误判，所以补一次 normcase 前缀比较。
+    """
+    try:
+        candidate.relative_to(root)
+        return True
+    except ValueError:
+        pass
+    root_s = os.path.normcase(str(root)).rstrip("\\/")
+    cand_s = os.path.normcase(str(candidate))
+    return cand_s == root_s or cand_s.startswith(root_s + os.sep)
+
+
 class SandboxError(RuntimeError):
     """沙箱准备失败。"""
 
@@ -26,13 +44,15 @@ class SandboxWorkspace:
     """`with SandboxWorkspace(src) as ws:` —— 退出时自动删掉副本。"""
 
     def __init__(self, source: Path | str | None = None) -> None:
-        self.source = Path(source) if source else None
+        # 立刻 resolve：TEMP 里可能带 Windows 8.3 短名（如 ADMINI~1），
+        # 不展开的话后续和 resolve 过的路径比对会永远失败。
+        self.source = Path(source).resolve() if source else None
         self._root: Path | None = None
 
     # ------------------------------------------------------------ 生命周期
 
     def __enter__(self) -> "SandboxWorkspace":
-        self._root = Path(tempfile.mkdtemp(prefix="codefix-"))
+        self._root = Path(tempfile.mkdtemp(prefix="codefix-")).resolve()
         if self.source is not None:
             self._copy_in(self.source)
         return self
@@ -81,8 +101,9 @@ class SandboxWorkspace:
         return self._root
 
     def path(self, relative: str) -> Path:
-        candidate = (self.root / relative).resolve()
-        if self.root not in candidate.parents and candidate != self.root:
+        root = self.root
+        candidate = (root / relative).resolve()
+        if not is_within(root, candidate):
             raise SandboxError(f"路径越界：{relative}")
         return candidate
 
