@@ -35,6 +35,25 @@ def test_workspace_rejects_traversal():
             ws.path("../../../etc/passwd")
 
 
+def test_workspace_root_is_already_resolved():
+    """回归：root 必须是 resolve 过的。
+
+    TEMP 在部分 Windows 机器上带 8.3 短名（ADMINI~1），
+    若 root 不 resolve，和 resolve 过的子路径比对会永远失败，
+    表现为正常文件被误判成「路径越界」。
+    """
+    with SandboxWorkspace(EXAMPLE) as ws:
+        assert ws.root == ws.root.resolve()
+
+
+def test_normal_files_are_not_mistaken_for_traversal():
+    """回归：普通文件必须能正常取到，不能被越界检查误杀。"""
+    with SandboxWorkspace(EXAMPLE) as ws:
+        target = ws.path("calc.py")
+        assert target.exists()
+        assert ws.path("tests/test_calc.py").exists()
+
+
 def test_pytest_reports_failures():
     with SandboxWorkspace(EXAMPLE) as ws:
         result = run_pytest(ws.root)

@@ -29,8 +29,17 @@ class LLMClient(Protocol):
 # 先替换 `return a - b` 之后，如果还有一条以 `return a + b # BUG` 开头
 # 的规则，就会把注释尾巴切掉，产出语法错误的代码。
 DEMO_FIXES: dict[str, str] = {
+    # examples/broken_project —— 逻辑错 + 越界
     "    return a - b  # BUG: 应该是 a + b": "    return a + b",
     "    return items[len(items)]  # BUG: 下标越界，应该是 items[-1]": "    return items[-1]",
+    # examples/syntax_error —— 缺冒号
+    "def greet(name)": "def greet(name):",
+    # examples/name_error —— 函数名拼错
+    "    return lenght(items)": "    return len(items)",
+    # examples/off_by_one —— 循环少一步
+    "    for i in range(len(numbers) - 1):": "    for i in range(len(numbers)):",
+    # examples/empty_input —— 空列表除零
+    "    return sum(values) / len(values)": "    return sum(values) / len(values) if values else 0.0",
 }
 
 

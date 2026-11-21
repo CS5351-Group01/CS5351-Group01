@@ -52,8 +52,14 @@ def main() -> int:
         owner = role.get("github") or ""
         ok = owner and not owner.startswith(PLACEHOLDER_PREFIX)
         if not ok:
-            lines.append(f"# TODO: 角色 {role['id']}（{role.get('title', '')}）还没填 github")
-            owner = f"role-{role['id'].lower()}"
+            # 用户名没填就别输出 `@role-x` 这种假 handle，
+            # GitHub 会判定 CODEOWNERS 有错并挂一条黄条。整段注释掉更干净。
+            lines.append(f"# TODO: 角色 {role['id']}（{role.get('title', '')}）还没填 github，"
+                         f"下面几行先注释掉，填好后重新生成")
+            for pattern in role.get("paths") or []:
+                lines.append(f"# {pattern}")
+            lines.append("")
+            continue
         lines.append(f"# {role['id']} — {role.get('title', '')}")
         for pattern in role.get("paths") or []:
             lines.append(f"{pattern} @{owner}")

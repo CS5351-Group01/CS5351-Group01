@@ -9,7 +9,7 @@
 
 | 归属 | 路径 |
 |---|---|
-| **组长独占** | `course_evidence/team/**`、`docs/**`、`tools/**`、`.github/**`、`examples/**`、`tests/conftest.py`、`README.md`、`requirements.txt`、`run.py`、`roles.json` |
+| **组长独占** | `course_evidence/team/**`、`docs/**`、`tools/**`、`scripts/**`、`.github/**`、`examples/**`、`tests/conftest.py`、`README.md`、`requirements.txt`、`run.py`、`roles.json` |
 | **A** 后端 | `app/**`、`tests/roles/a/**` |
 | **B** Agent 核心 | `agent/**`、`tests/roles/b/**` |
 | **C** 沙箱 | `sandbox/**`、`tests/roles/c/**` |
