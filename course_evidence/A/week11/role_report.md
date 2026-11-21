@@ -2,7 +2,7 @@
 
 ## 改了什么
 
-- `tests/roles/a/test_auth_boundaries.py`（新增，6 个边界测试）— commit `ac192a4`
+- `tests/roles/a/test_auth_boundaries.py`（新增，6 个边界测试）— commit `ac192a4`；签名篡改用例改为翻转中段字符，防止假绿 — commit `4d3422b`
 - `course_evidence/A/week11/role_report.md`（本文件，新增）
 - 说明：`course/a` 原本停在旧骨架 `9d9aae1`，没有 `scripts/setup.ps1`、`examples/` 等文件；已先 fast-forward 到 `origin/main`（`e5bd1ed`）再写测试。没有改 `app/` 等任何归属别人的文件。
 
@@ -72,6 +72,55 @@ tests/roles/a/test_auth_api.py::test_health
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 54 passed, 1 warning in 9.11s
+```
+
+修掉签名用例的假绿后，连跑 5 次：
+
+```powershell
+1..5 | % { .\.venv\Scripts\python.exe -m pytest tests/roles/a -q }
+```
+
+```text
+.............                                                            [100%]
+============================== warnings summary ===============================
+tests/roles/a/test_auth_api.py::test_health
+  D:\coding\CS5351-Group01\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+13 passed, 1 warning in 2.10s
+.............                                                            [100%]
+============================== warnings summary ===============================
+tests/roles/a/test_auth_api.py::test_health
+  D:\coding\CS5351-Group01\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+13 passed, 1 warning in 1.66s
+.............                                                            [100%]
+============================== warnings summary ===============================
+tests/roles/a/test_auth_api.py::test_health
+  D:\coding\CS5351-Group01\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+13 passed, 1 warning in 1.63s
+.............                                                            [100%]
+============================== warnings summary ===============================
+tests/roles/a/test_auth_api.py::test_health
+  D:\coding\CS5351-Group01\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+13 passed, 1 warning in 1.65s
+.............                                                            [100%]
+============================== warnings summary ===============================
+tests/roles/a/test_auth_api.py::test_health
+  D:\coding\CS5351-Group01\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+13 passed, 1 warning in 1.66s
 ```
 
 ## 结果
