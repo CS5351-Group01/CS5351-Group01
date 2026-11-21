@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import base64
 import uuid
 
 from app.services.auth import create_access_token
+
+
+def _decoded_segment(segment: str) -> bytes:
+    """把 JWT 的一段 base64url 还原成字节（补上省略的填充）。"""
+    return base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))
 
 
 def test_expired_token_rejected(client):
@@ -15,12 +21,21 @@ def test_expired_token_rejected(client):
 
 
 def test_tampered_signature_rejected(client, auth_headers):
-    """改掉签名段一个字符后，token 必须失效。"""
+    """改掉签名段中间一个字符后，token 必须失效。
+
+    不能改最后一位：base64 最后一个字符只有 2 个有效 bit，
+    翻转它可能解码出完全相同的签名字节，断言会假绿。
+    """
     token = auth_headers["Authorization"].removeprefix("Bearer ")
     head, body, signature = token.split(".")
-    flipped = ("A" if signature[-1] != "A" else "B")
-    tampered = f"{head}.{body}.{signature[:-1]}{flipped}"
+    middle = len(signature) // 2
+    replacement = "A" if signature[middle] != "A" else "B"
+    tampered_signature = signature[:middle] + replacement + signature[middle + 1 :]
 
+    # 先确认签名内容真的变了，防止测试空翻
+    assert _decoded_segment(tampered_signature) != _decoded_segment(signature)
+
+    tampered = f"{head}.{body}.{tampered_signature}"
     response = client.get("/auth/me", headers={"Authorization": f"Bearer {tampered}"})
     assert response.status_code == 401
 
