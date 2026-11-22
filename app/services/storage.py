@@ -11,6 +11,10 @@ from fastapi import UploadFile
 STORAGE_ROOT = Path("storage")
 MAX_BYTES = 1_000_000  # 单文件 1MB 上限
 
+# 只接受 Python 源文件。系统只处理 .py，别的类型进来没有任何用途，
+# 尽早拒绝比落盘后再判断干净。
+ALLOWED_SUFFIXES = {".py"}
+
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]")
 
 
@@ -26,6 +30,13 @@ class StorageService:
         self.root = Path(root or STORAGE_ROOT)
 
     def save(self, upload: UploadFile, owner_id: int) -> Path:
+        # 先校验扩展名，再读内容：1MB 的 .exe 没必要读进内存
+        filename = safe_filename(upload.filename or "upload.py")
+        suffix = Path(filename).suffix.lower()
+        if suffix not in ALLOWED_SUFFIXES:
+            allowed = "/".join(sorted(ALLOWED_SUFFIXES))
+            raise ValueError(f"只接受 {allowed} 文件，收到的是 {filename}")
+
         target_dir = (self.root / str(owner_id)).resolve()
         target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -33,7 +44,6 @@ class StorageService:
         if len(data) > MAX_BYTES:
             raise ValueError(f"文件超过 {MAX_BYTES} 字节上限")
 
-        filename = safe_filename(upload.filename or "upload.py")
         target = target_dir / f"{uuid.uuid4().hex}_{filename}"
 
         # 再确认一次没有逃出 owner 目录
