@@ -35,7 +35,7 @@
       "id": "A",
       "title": "后端：接口、认证、数据、任务调度",
       "legacy": "参考项目的 Backend Lead / Backend Developer",
-      "github": "PUT-GITHUB-NAME",
+      "github": "Jy1372099",
       "paths": [
         "app/**",
         "course_evidence/A/**",
@@ -48,7 +48,7 @@
       "id": "B",
       "title": "Agent 核心：技能、记忆、补丁",
       "legacy": "参考项目的 Agent Core Engineer",
-      "github": "PUT-GITHUB-NAME",
+      "github": "hh-Yan",
       "paths": [
         "agent/**",
         "course_evidence/B/**",
@@ -61,7 +61,7 @@
       "id": "C",
       "title": "沙箱与测试执行",
       "legacy": "参考项目的 Sandbox & Testing Engineer",
-      "github": "PUT-GITHUB-NAME",
+      "github": "YangC929",
       "paths": [
         "sandbox/**",
         "course_evidence/C/**",
@@ -74,7 +74,7 @@
       "id": "D",
       "title": "LLM 集成：客户端、Prompt、闭环修复",
       "legacy": "参考项目的 LLM Integration Engineer",
-      "github": "PUT-GITHUB-NAME",
+      "github": "tzy72611008",
       "paths": [
         "llm/**",
         "course_evidence/D/**",
@@ -87,7 +87,7 @@
       "id": "E",
       "title": "前端：上传、对话、结果可视化",
       "legacy": "参考项目的 Team Leader / Frontend + Frontend Developer",
-      "github": "PUT-GITHUB-NAME",
+      "github": "Sorrow878",
       "paths": [
         "frontend/**",
         "course_evidence/E/**",
@@ -100,7 +100,7 @@
       "id": "F",
       "title": "评估与实验：数据集、批量跑、指标",
       "legacy": "参考项目的 Evaluation & Experiment Engineer",
-      "github": "PUT-GITHUB-NAME",
+      "github": "vfanss",
       "paths": [
         "eval/**",
         "course_evidence/F/**",
