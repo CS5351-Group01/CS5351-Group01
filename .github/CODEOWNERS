@@ -14,32 +14,32 @@ requirements.txt @vfanss
 run.py @vfanss
 roles.json @vfanss
 
-# TODO: 角色 A（后端：接口、认证、数据、任务调度）还没填 github，下面几行先注释掉，填好后重新生成
-# app/**
-# course_evidence/A/**
-# tests/roles/a/**
+# A — 后端：接口、认证、数据、任务调度
+app/** @Jy1372099
+course_evidence/A/** @Jy1372099
+tests/roles/a/** @Jy1372099
 
-# TODO: 角色 B（Agent 核心：技能、记忆、补丁）还没填 github，下面几行先注释掉，填好后重新生成
-# agent/**
-# course_evidence/B/**
-# tests/roles/b/**
+# B — Agent 核心：技能、记忆、补丁
+agent/** @hh-Yan
+course_evidence/B/** @hh-Yan
+tests/roles/b/** @hh-Yan
 
-# TODO: 角色 C（沙箱与测试执行）还没填 github，下面几行先注释掉，填好后重新生成
-# sandbox/**
-# course_evidence/C/**
-# tests/roles/c/**
+# C — 沙箱与测试执行
+sandbox/** @YangC929
+course_evidence/C/** @YangC929
+tests/roles/c/** @YangC929
 
-# TODO: 角色 D（LLM 集成：客户端、Prompt、闭环修复）还没填 github，下面几行先注释掉，填好后重新生成
-# llm/**
-# course_evidence/D/**
-# tests/roles/d/**
+# D — LLM 集成：客户端、Prompt、闭环修复
+llm/** @tzy72611008
+course_evidence/D/** @tzy72611008
+tests/roles/d/** @tzy72611008
 
-# TODO: 角色 E（前端：上传、对话、结果可视化）还没填 github，下面几行先注释掉，填好后重新生成
-# frontend/**
-# course_evidence/E/**
-# tests/roles/e/**
+# E — 前端：上传、对话、结果可视化
+frontend/** @Sorrow878
+course_evidence/E/** @Sorrow878
+tests/roles/e/** @Sorrow878
 
-# TODO: 角色 F（评估与实验：数据集、批量跑、指标）还没填 github，下面几行先注释掉，填好后重新生成
-# eval/**
-# course_evidence/F/**
-# tests/roles/f/**
+# F — 评估与实验：数据集、批量跑、指标
+eval/** @vfanss
+course_evidence/F/** @vfanss
+tests/roles/f/** @vfanss
