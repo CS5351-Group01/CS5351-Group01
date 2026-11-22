@@ -2,7 +2,7 @@
 
 ## 改了什么
 
-- `frontend/index.html`（功能 commit 短 SHA：待提交后填写）。成功创建修复任务后，在任务编号旁显示上传的文件名和字节数。
+- `frontend/index.html`（功能 commit 短 SHA：`08ddb70`）。成功创建修复任务后，在任务编号旁显示上传的文件名和字节数。
 - `course_evidence/E/week11/role_report.md`、`01-repair-success.png`、`02-upload-file-details.png`。记录浏览器实测过程和修改前后的截图。
 
 ## 实际跑了什么
@@ -102,4 +102,4 @@ E_WEEK11_RESULT: PASS
 
 ## 卡在哪
 
-本地测试已通过。仓库还没有配置 Git 提交身份，访问 `github.com:443` 的 Git 请求也超时，代码与报告目前留在本地 `course/e`，待提交并推送后才能出现在 GitHub PR 中。
+无
