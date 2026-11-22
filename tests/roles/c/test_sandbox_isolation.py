@@ -12,11 +12,12 @@
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 import pytest
 
-from sandbox.runner import run_pytest
+from sandbox.runner import check_syntax, run_pytest
 from sandbox.workspace import SandboxError, SandboxWorkspace
 
 EXAMPLE = Path(__file__).resolve().parents[3] / "examples" / "broken_project"
@@ -93,3 +94,59 @@ def test_empty_dir_makes_empty_sandbox(tmp_path):
         assert ws.root.is_dir()
         assert ws.root != tmp_path
         assert list(ws.root.iterdir()) == []
+
+
+# ---------------------------------------------------------------- Day 3 新增
+def test_missing_source_raises_and_leaves_no_temp_dir(monkeypatch, tmp_path):
+    """源目录不存在 → 抛 SandboxError，且进入失败时不能泄漏临时目录。"""
+    created: list[Path] = []
+    real_mkdtemp = tempfile.mkdtemp
+
+    def spy(prefix=None, dir=None):  # noqa: A002 - 跟随 tempfile 的参数名
+        p = real_mkdtemp(prefix=prefix, dir=tmp_path)
+        created.append(Path(p))
+        return p
+
+    monkeypatch.setattr("sandbox.workspace.tempfile.mkdtemp", spy)
+
+    with pytest.raises(SandboxError):
+        with SandboxWorkspace(tmp_path / "definitely-missing"):
+            pass
+
+    assert created, "应当先创建过临时目录"
+    assert not created[0].exists(), "进入失败后临时目录必须被清理"
+
+
+def test_run_pytest_on_missing_dir_returns_failed(tmp_path):
+    """cwd 不存在时不能抛异常、不能挂死，必须返回 passed=False。"""
+    result = run_pytest(tmp_path / "no-such-dir", timeout=20)
+
+    assert result.passed is False
+    assert result.timed_out is False
+    assert result.exit_code != 0
+    assert result.stderr.strip() != ""
+
+
+def test_check_syntax_flags_broken_file(tmp_path):
+    """残缺文件必须被判失败，并且 stderr 里要有原因。"""
+    (tmp_path / "broken.py").write_text("def f(\n", encoding="utf-8")
+
+    result = check_syntax(tmp_path, "broken.py")
+
+    assert result.passed is False
+    assert result.exit_code != 0
+    assert result.stderr.strip() != ""
+
+
+def test_two_sandboxes_are_isolated():
+    """先后开两个沙箱：路径不同，互相看不到对方写的文件。"""
+    with SandboxWorkspace(EXAMPLE) as first:
+        first_root = first.root
+        first.write("marker.txt", "only-in-first")
+
+        with SandboxWorkspace(EXAMPLE) as second:
+            assert second.root != first_root
+            assert not (second.root / "marker.txt").exists()
+
+        assert first_root.exists()
+        assert (first_root / "marker.txt").read_text(encoding="utf-8") == "only-in-first"

@@ -54,7 +54,14 @@ class SandboxWorkspace:
     def __enter__(self) -> "SandboxWorkspace":
         self._root = Path(tempfile.mkdtemp(prefix="codefix-")).resolve()
         if self.source is not None:
-            self._copy_in(self.source)
+            # 进入失败（源目录不存在、超过体积上限…）时 __exit__ 不会被调用，
+            # 这里必须自己把已经建出来的临时目录删掉，否则每失败一次泄漏一个。
+            try:
+                self._copy_in(self.source)
+            except BaseException:
+                shutil.rmtree(self._root, ignore_errors=True)
+                self._root = None
+                raise
         return self
 
     def __exit__(self, *exc_info) -> None:
