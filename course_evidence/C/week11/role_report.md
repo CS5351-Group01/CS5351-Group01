@@ -79,3 +79,85 @@ C_WEEK11_RESULT: PASS
   沙箱里的代码仍然以当前用户权限运行，可以读 `%USERPROFILE%\.ssh`、可以联网。
   要真正隔离需要 subprocess 降权 / Windows Job Object 限额 / 容器化，本层当前不具备。
 - 超时断言的上界 5000ms 是为慢机器留的余量，不是精确值。
+
+---
+
+## Day 3 改了什么
+
+| 文件 | 说明 | commit |
+|---|---|---|
+| `tests/roles/c/test_sandbox_isolation.py` | 新增 4 条边界测试：源目录不存在、`run_pytest` 传不存在的目录、`check_syntax` 对语法错文件、两个沙箱互不干扰 | `288b84a` |
+| `sandbox/workspace.py` | **修 BUG 1**：`__enter__` 里 `_copy_in` 抛异常时清理已建出来的临时目录 | `288b84a` |
+| `sandbox/runner.py` | **修 BUG 2**：`run_pytest` / `check_syntax` 捕获 `OSError`，返回 `passed=False` 而不是把异常抛给调用方 | `288b84a` |
+
+### 测出来的两个真 bug（都是这 4 条测试逼出来的）
+
+**BUG 1 —— 进入失败的沙箱会泄漏临时目录。**
+`SandboxWorkspace("不存在的路径")` 时，`__enter__` 先 `mkdtemp` 建目录，再由 `_copy_in` 抛 `SandboxError`；
+而 `__enter__` 抛异常时 `__exit__` **不会被调用**，于是那个 `codefix-xxxx` 目录永远留在临时目录里。
+测试里断言 `not created[0].exists()` 直接失败，现象可复现。
+修法：`__enter__` 里 try/except，失败时 `shutil.rmtree` 并重新抛出。
+
+**BUG 2 —— `run_pytest` 对不存在的 cwd 直接抛 `NotADirectoryError [WinError 267]`。**
+`subprocess.run(cwd=...)` 启动失败抛 `OSError`，原代码只捕获 `TimeoutExpired`，异常会炸到调用方。
+在真实流程里，"用户上传的目录中途被删掉"会让整个修复任务 500，而不是"本轮失败、再来一轮"。
+修法：捕获 `OSError` → `RunResult(passed=False, exit_code=-1, stderr=...)`；`check_syntax` 同样处理。
+
+`sandbox/**` 属于 C 自己的目录，两处都在权限内直接修了，没有改别人的文件。
+
+## Day 3 实际跑了什么
+
+同步 main（这步先做）：
+
+```text
+PS D:\Projects\SE_project\CS5351-Group01> git fetch origin
+   9d9aae1..ec5854e  course/d          -> origin/course/d
+   ...
+PS D:\Projects\SE_project\CS5351-Group01> git merge --ff-only origin/main
+Already up to date.
+```
+
+修复**之前**先跑了一次，用来确认当前行为（不是猜的）：
+
+```text
+PS D:\Projects\SE_project\CS5351-Group01> .\.venv\Scripts\python.exe -m pytest tests/roles/c -q
+...
+E                                    NotADirectoryError: [WinError 267] 目录名称无效。
+D:\Program Files\Miniconda3\Lib\subprocess.py:1540: NotADirectoryError
+=========================== short test summary info ===========================
+FAILED tests/roles/c/test_sandbox_isolation.py::test_missing_source_raises_and_leaves_no_temp_dir
+FAILED tests/roles/c/test_sandbox_isolation.py::test_run_pytest_on_missing_dir_returns_failed
+2 failed, 17 passed in 4.93s
+```
+
+修复后，按今天的验收标准连跑 3 次：
+
+```text
+PS D:\Projects\SE_project\CS5351-Group01> 1..3 | ForEach-Object { .\.venv\Scripts\python.exe -m pytest tests/roles/c -q }
+===== 第 1 次 =====
+19 passed in 4.06s
+===== 第 2 次 =====
+19 passed in 4.46s
+===== 第 3 次 =====
+19 passed in 4.03s
+```
+
+全量回归（确认改 `sandbox/` 没影响其它角色）：
+
+```text
+PS D:\Projects\SE_project\CS5351-Group01> .\.venv\Scripts\python.exe -m pytest tests -q
+59 passed, 1 warning in 17.10s
+```
+
+## Day 3 结果
+
+```text
+C_WEEK11_DAY3: PASS
+```
+
+- 本层用例：19 个（原 15 + Day 3 新增 4），连跑 3 次全绿
+- 跳过：0
+- 失败：0
+- 发现 bug：2 个，均已修复并纳入回归（`288b84a`）
+- 遗留（组长的文件，未改）：`tests/conftest.py` 每次运行仍会在仓库根泄漏一个 `codefix-tests-*` 目录，
+  已在本机清理；建议 `.gitignore` 补 `pytest-of-*/`、`codefix-tests-*/` 两行。
