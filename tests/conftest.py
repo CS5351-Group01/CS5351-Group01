@@ -6,11 +6,35 @@
 
 from __future__ import annotations
 
+import atexit
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
 _TMP_DIR = Path(tempfile.mkdtemp(prefix="codefix-tests-"))
+
+
+def _cleanup_tmp_dir() -> None:
+    """跑完删掉临时目录。
+
+    mkdtemp 出来的目录不会自己消失。而且 Windows 上 sqlite 文件被连接持有，
+    不先 dispose 引擎就删不掉，`ignore_errors=True` 会静默失败——
+    必须先关连接再 rmtree。
+
+    这处泄漏是 C 在 Week 11 抓出来的：系统临时目录里堆了几十个残留。
+    """
+    try:
+        from app.database import engine
+
+        engine.dispose()
+    except Exception:  # noqa: BLE001 - 清理阶段不该再抛异常
+        pass
+    shutil.rmtree(_TMP_DIR, ignore_errors=True)
+
+
+atexit.register(_cleanup_tmp_dir)
+
 os.environ["DATABASE_URL"] = f"sqlite:///{(_TMP_DIR / 'test.db').as_posix()}"
 os.environ.setdefault("APP_SECRET", "test-secret-do-not-use-in-prod")
 
