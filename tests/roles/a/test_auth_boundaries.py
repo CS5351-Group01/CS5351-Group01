@@ -93,19 +93,29 @@ def test_list_tasks_requires_auth(client):
     assert response.status_code == 401
 
 
-def test_exe_extension_current_behavior(client, auth_headers):
-    """先锁定现状：后端没有扩展名白名单，.exe 目前也能建任务。
+def test_exe_extension_rejected(client, auth_headers):
+    """非 .py 文件必须被拒绝。
 
-    这是记录「当前行为」的回归测试。以后如果加了白名单改成 400，
-    这个用例会红，提醒同步更新预期并补真正的拒绝测试。
+    这条原本是「记录现状」的回归测试（当时后端的 .exe 也能建任务）。
+    加白名单之后升级为强制行为：只接 .py。
     """
     response = client.post(
         "/tasks",
         headers=auth_headers,
         files={"file": ("virus.exe", b"print('hi')\n", "application/octet-stream")},
     )
+    assert response.status_code == 400
+    assert "只接受" in response.json()["detail"]
+
+
+def test_py_extension_accepted_case_insensitive(client, auth_headers):
+    """大写扩展名也要放行——后缀比较要统一转小写，别把 .PY 当成非法文件。"""
+    response = client.post(
+        "/tasks",
+        headers=auth_headers,
+        files={"file": ("MAIN.PY", b"print('hi')\n", "text/x-python")},
+    )
     assert response.status_code == 201
-    assert response.json()["filename"] == "virus.exe"
 
 
 def test_other_user_cannot_read_task(client):
