@@ -55,3 +55,38 @@ def test_extract_code_block_unclosed_fence():
     reply = "修改如下：\n```python\nprint('hi')\n" # 故意不写结尾的 ```
     result = extract_code_block(reply)
     assert result is None
+
+# ==========================================
+# Day 3 新增：抗并发、抗异常、稳定性测试
+# ==========================================
+
+def test_write_overwrite_existing_file(ws):
+    """1. write 覆盖已有文件"""
+    ws.write("overwrite.txt\naaa")
+    ws.write("overwrite.txt\nbbb")
+    assert ws.read("overwrite.txt") == "bbb"
+
+def test_grep_binary_file_no_crash(ws):
+    """2. grep 遇到二进制文件不能崩"""
+    bin_file = ws.root / "binary.dat"
+    # 写入包含 \x00\x01 的二进制内容
+    bin_file.write_bytes(b"\x00\x01\x02hello\x00\x03")
+    # 只要是字符串返回即可，不抛异常
+    result = ws.grep("hello")
+    assert isinstance(result, str)
+
+def test_ls_empty_directory_returns_marker(ws):
+    """3. ls 空目录返回（空目录）"""
+    empty_dir = ws.root / "empty_dir"
+    empty_dir.mkdir()
+    result = ws.ls("empty_dir")
+    assert result == "（空目录）"
+
+def test_memory_clear():
+    """4. Memory 清空"""
+    from agent.memory import Memory
+    mem = Memory()
+    mem.add("user", "hello")
+    mem.add("assistant", "hi")
+    mem.clear()
+    assert mem.recent() == []
