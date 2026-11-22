@@ -16,6 +16,11 @@ os.environ.setdefault("APP_SECRET", "test-secret-do-not-use-in-prod")
 
 import pytest  # noqa: E402
 
+# 上传目录也挪到临时目录，否则测试会往仓库根目录扔 storage/
+import app.services.storage as _storage  # noqa: E402
+
+_storage.STORAGE_ROOT = _TMP_DIR / "storage"
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE_PROJECT = REPO_ROOT / "examples" / "broken_project"
 

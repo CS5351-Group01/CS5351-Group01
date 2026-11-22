@@ -10,7 +10,7 @@
   body { margin:0; font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
   header { padding:16px 24px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
   header h1 { font-size:16px; margin:0; font-weight:600; }
-  main { max-width:960px; margin:0 auto; padding:24px; display:grid; gap:16px; }
+  main { max-width:1200px; margin:0 auto; padding:24px; display:grid; gap:16px; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:20px; }
   .panel h2 { margin:0 0 12px; font-size:14px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
   label { display:block; margin-bottom:10px; }
@@ -29,6 +29,25 @@
   .badge.running { color:var(--accent); border-color:var(--accent); }
   pre { background:#0d1016; border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto; max-height:420px; margin:12px 0 0; }
   .hidden { display:none; }
+
+  /* ---- 修复前后对比 ---- */
+  .diff { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+  @media (max-width:900px) { .diff { grid-template-columns:1fr; } }
+  .diff-col { min-width:0; }
+  .diff-head { font-size:12px; color:var(--muted); margin-bottom:6px; display:flex; gap:8px; align-items:center; }
+  .diff-head .tag { padding:1px 7px; border-radius:99px; border:1px solid var(--line); font-size:11px; }
+  .code { background:#0d1016; border:1px solid var(--line); border-radius:8px; overflow:auto; max-height:460px;
+          font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,"Courier New",monospace; }
+  .code .line { display:flex; }
+  .code .ln { flex:0 0 46px; text-align:right; padding:0 8px; color:#4a5160; user-select:none; }
+  .code .tx { flex:1; padding:0 8px; white-space:pre; }
+  .line.del .tx { background:rgba(248,81,73,.13); }
+  .line.ins .tx { background:rgba(63,185,80,.13); }
+  .line.del .ln { color:var(--bad); }
+  .line.ins .ln { color:var(--ok); }
+  .legend { font-size:12px; color:var(--muted); margin-top:8px; }
+  .legend b { color:var(--bad); font-weight:600; }
+  .legend i { color:var(--ok); font-style:normal; font-weight:600; }
 </style>
 </head>
 <body>
@@ -83,6 +102,21 @@
       <span id="iters">—</span>
       <span id="task-msg" class="muted"></span>
     </div>
+
+    <div class="diff hidden" id="diff">
+      <div class="diff-col">
+        <div class="diff-head">原始代码 <span class="tag" id="orig-name"></span></div>
+        <div class="code" id="code-before"></div>
+      </div>
+      <div class="diff-col">
+        <div class="diff-head">修复后 <span class="tag" id="fixed-tag">1 轮</span></div>
+        <div class="code" id="code-after"></div>
+      </div>
+    </div>
+    <div class="legend hidden" id="legend">
+      红色是删掉的行，绿色是新增/改动的行。
+    </div>
+
     <pre id="output" class="hidden"></pre>
   </section>
 
@@ -167,6 +201,9 @@ async function submit() {
     const task = await api("/tasks", { method: "POST", body: form });
     setMsg($("upload-msg"), `已创建任务 #${task.id} · ${file.name}（${file.size} 字节）`);
     $("result-panel").classList.remove("hidden");
+    $("diff").classList.add("hidden");
+    $("legend").classList.add("hidden");
+    $("output").classList.add("hidden");
     poll(task.id);
   } catch (e) { setMsg($("upload-msg"), e.message, true); }
 }
@@ -177,10 +214,95 @@ function paint(task) {
   status.className = "badge " + task.status;
   $("iters").textContent = task.iterations || "—";
   $("task-msg").textContent = task.message || "";
-  if (task.result) {
+  $("fixed-tag").textContent = (task.iterations || 1) + " 轮";
+
+  if (task.status === "failed" && task.result) {
     $("output").classList.remove("hidden");
     $("output").textContent = task.result;
   }
+}
+
+/* ---------- 行级 diff（LCS），够用且不引依赖 ---------- */
+function lcsDiff(a, b) {
+  const n = a.length, m = b.length;
+  if (n * m > 2_000_000) return null;  // 太大就放弃 diff，退回并排显示
+
+  const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j]
+        ? dp[i + 1][j + 1] + 1
+        : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+
+  const ops = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { ops.push({ type: "same", left: a[i], right: b[j] }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ type: "del", left: a[i] }); i++; }
+    else { ops.push({ type: "ins", right: b[j] }); j++; }
+  }
+  while (i < n) ops.push({ type: "del", left: a[i++] });
+  while (j < m) ops.push({ type: "ins", right: b[j++] });
+  return ops;
+}
+
+function alignRows(ops) {
+  const rows = [];
+  let leftNo = 1, rightNo = 1;
+  for (const op of ops) {
+    if (op.type === "same") {
+      rows.push({ l: { no: leftNo++, text: op.left, cls: "same" },
+                  r: { no: rightNo++, text: op.right, cls: "same" } });
+    } else if (op.type === "del") {
+      rows.push({ l: { no: leftNo++, text: op.left, cls: "del" }, r: null });
+    } else {
+      rows.push({ l: null, r: { no: rightNo++, text: op.right, cls: "ins" } });
+    }
+  }
+  return rows;
+}
+
+function cell(side) {
+  const div = document.createElement("div");
+  div.className = "line " + (side ? side.cls : "");
+  const no = document.createElement("span");
+  no.className = "ln";
+  no.textContent = side ? side.no : "";
+  const tx = document.createElement("span");
+  tx.className = "tx";
+  tx.textContent = side ? side.text : "";
+  div.append(no, tx);
+  return div;
+}
+
+function renderDiff(beforeText, afterText) {
+  const before = beforeText.split("\n");
+  const after = afterText.split("\n");
+
+  const ops = lcsDiff(before, after);
+  const rows = ops
+    ? alignRows(ops)
+    : before.map((line, idx) => ({
+        l: { no: idx + 1, text: line, cls: "same" },
+        r: after[idx] === undefined
+          ? null
+          : { no: idx + 1, text: after[idx], cls: line === after[idx] ? "same" : "ins" },
+      }));
+
+  const leftBox = $("code-before");
+  const rightBox = $("code-after");
+  leftBox.replaceChildren();
+  rightBox.replaceChildren();
+  for (const row of rows) {
+    leftBox.append(cell(row.l));
+    rightBox.append(cell(row.r));
+  }
+
+  $("diff").classList.remove("hidden");
+  $("legend").classList.remove("hidden");
+  $("output").classList.add("hidden");
 }
 
 async function poll(id) {
@@ -189,7 +311,20 @@ async function poll(id) {
     try {
       const task = await api("/tasks/" + id);
       paint(task);
-      if (task.status === "success" || task.status === "failed") return;
+      if (task.status === "success" || task.status === "failed") {
+        if (task.status === "success") {
+          try {
+            const original = await api(`/tasks/${id}/original`);
+            $("orig-name").textContent = original.filename || "";
+            renderDiff(original.content, task.result || "");
+          } catch (e) {
+            // 拿不到原始代码就退回只显示结果，不影响主流程
+            $("output").classList.remove("hidden");
+            $("output").textContent = task.result || "";
+          }
+        }
+        return;
+      }
     } catch (e) { setMsg($("upload-msg"), e.message, true); return; }
     await new Promise((r) => setTimeout(r, 1000));
   }
