@@ -22,6 +22,7 @@
   button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
   .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .muted { color:var(--muted); }
+  #upload-msg { overflow-wrap:anywhere; }
   .badge { padding:2px 8px; border-radius:99px; font-size:12px; border:1px solid var(--line); }
   .badge.success { color:var(--ok); border-color:var(--ok); }
   .badge.failed  { color:var(--bad); border-color:var(--bad); }
@@ -68,7 +69,7 @@
     <div class="row">
       <input type="file" id="file" accept=".py">
       <button id="submit">开始修复</button>
-      <span id="upload-msg" class="muted"></span>
+      <span id="upload-msg" class="muted" role="status"></span>
     </div>
   </section>
 
@@ -164,7 +165,7 @@ async function submit() {
   setMsg($("upload-msg"), "上传中…");
   try {
     const task = await api("/tasks", { method: "POST", body: form });
-    setMsg($("upload-msg"), "已创建任务 #" + task.id);
+    setMsg($("upload-msg"), `已创建任务 #${task.id} · ${file.name}（${file.size} 字节）`);
     $("result-panel").classList.remove("hidden");
     poll(task.id);
   } catch (e) { setMsg($("upload-msg"), e.message, true); }
