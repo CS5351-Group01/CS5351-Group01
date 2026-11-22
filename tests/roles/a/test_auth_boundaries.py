@@ -13,6 +13,19 @@ def _decoded_segment(segment: str) -> bytes:
     return base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))
 
 
+def _new_user(client) -> dict[str, str]:
+    """注册并登录一个全新用户，返回 Authorization 头。"""
+    email = f"u{uuid.uuid4().hex[:10]}@example.com"
+    password = "secret123"
+
+    created = client.post("/auth/register", json={"email": email, "password": password})
+    assert created.status_code == 201
+
+    response = client.post("/auth/login", json={"email": email, "password": password})
+    assert response.status_code == 200
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
 def test_expired_token_rejected(client):
     """过期 token 必须被拒绝。"""
     token = create_access_token("1", expires_in=-1)
@@ -77,4 +90,55 @@ def test_empty_file_creates_task(client, auth_headers):
 def test_list_tasks_requires_auth(client):
     """不带 Authorization 访问任务列表必须是 401。"""
     response = client.get("/tasks")
+    assert response.status_code == 401
+
+
+def test_exe_extension_current_behavior(client, auth_headers):
+    """先锁定现状：后端没有扩展名白名单，.exe 目前也能建任务。
+
+    这是记录「当前行为」的回归测试。以后如果加了白名单改成 400，
+    这个用例会红，提醒同步更新预期并补真正的拒绝测试。
+    """
+    response = client.post(
+        "/tasks",
+        headers=auth_headers,
+        files={"file": ("virus.exe", b"print('hi')\n", "application/octet-stream")},
+    )
+    assert response.status_code == 201
+    assert response.json()["filename"] == "virus.exe"
+
+
+def test_other_user_cannot_read_task(client):
+    """B 用自己的 token 读 A 的任务，必须 404，不能是 200 或 403。"""
+    alice = _new_user(client)
+    bob = _new_user(client)
+
+    created = client.post(
+        "/tasks",
+        headers=alice,
+        files={"file": ("mine.py", b"print('hi')\n", "text/x-python")},
+    )
+    assert created.status_code == 201
+    task_id = created.json()["id"]
+
+    response = client.get(f"/tasks/{task_id}", headers=bob)
+    assert response.status_code == 404
+
+
+def test_password_length_boundary(client):
+    """密码 5 位注册 422，6 位（下限）注册 201。"""
+    short_email = f"short{uuid.uuid4().hex[:10]}@example.com"
+    exact_email = f"exact{uuid.uuid4().hex[:10]}@example.com"
+
+    short = client.post("/auth/register", json={"email": short_email, "password": "12345"})
+    assert short.status_code == 422
+
+    exact = client.post("/auth/register", json={"email": exact_email, "password": "123456"})
+    assert exact.status_code == 201
+
+
+def test_token_for_missing_user_rejected(client):
+    """签名合法但 sub 对应用户不存在，GET /auth/me 必须 401。"""
+    token = create_access_token("99999")
+    response = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
