@@ -85,20 +85,40 @@ def run_pytest(root: Path | str, target: str | None = None, timeout: float = 60.
             duration_ms=elapsed,
             timed_out=True,
         )
+    except OSError as exc:
+        # cwd 不存在 / 解释器起不来：同样按「运行失败」返回，不能把异常抛给调用方。
+        elapsed = int((time.perf_counter() - started) * 1000)
+        return RunResult(
+            passed=False,
+            exit_code=-1,
+            stdout="",
+            stderr=f"无法在 {root} 下启动 pytest：{exc}",
+            duration_ms=elapsed,
+        )
 
 
 def check_syntax(root: Path | str, target: str) -> RunResult:
     """只做语法检查，用于「没有测试文件」时的兜底验证。"""
     root = Path(root).resolve()
     started = time.perf_counter()
-    proc = subprocess.run(
-        [sys.executable, "-m", "py_compile", target],
-        cwd=str(root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "py_compile", target],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError as exc:
+        elapsed = int((time.perf_counter() - started) * 1000)
+        return RunResult(
+            passed=False,
+            exit_code=-1,
+            stdout="",
+            stderr=f"无法在 {root} 下执行 py_compile：{exc}",
+            duration_ms=elapsed,
+        )
     elapsed = int((time.perf_counter() - started) * 1000)
     return RunResult(
         passed=proc.returncode == 0,
