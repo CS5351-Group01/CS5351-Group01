@@ -177,6 +177,12 @@ def _(root: Path) -> None:
     commit(root, "docs(g): 野分支")
 
 
+@case("别人冒充角色分支", "course/a", "mallory", 1)
+def _(root: Path) -> None:
+    write(root, "course_evidence/A/week01/role_and_scope.md", "# 冒充者写的\n")
+    commit(root, "docs(a): 冒充")
+
+
 @case("组长用 ops 分支改保留路径", "ops/scaffold", "lead", 0)
 def _(root: Path) -> None:
     write(root, "README.md", "# 组长改\n")

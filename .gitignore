@@ -9,3 +9,8 @@ app.db
 *.db
 storage/
 .llm_replies/
+
+# 测试临时目录（conftest / pytest 异常情况下可能落到 cwd）
+codefix-tests-*/
+codefix-*/
+pytest-of-*/
