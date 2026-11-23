@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
-from llm.client import FakeLLM, default_client
+from llm.client import FakeLLM, default_client, describe_client
 from llm.iterative_fix import repair_project
 
 EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "examples"
@@ -82,11 +82,17 @@ def main() -> int:
         return 1
 
     client = default_client()
+    identity = describe_client(client)
+    print(f"客户端: {identity}")
+    if "FakeLLM" in identity:
+        print("⚠️  这一份结果来自假模型，不能写进真模型报告。")
+    print()
 
     results = [run_case(case, client, args.max_iters) for case in cases]
 
     if args.json:
-        print(json.dumps([asdict(r) for r in results], ensure_ascii=False, indent=2))
+        payload = {"client": identity, "results": [asdict(r) for r in results]}
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 
     print(f"{'用例':<24}{'结果':<8}{'轮数':<6}{'耗时':<8}说明")
