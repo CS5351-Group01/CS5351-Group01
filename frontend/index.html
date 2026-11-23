@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>代码修复代理</title>
 <style>
-  :root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --text:#e6e9ef; --muted:#8b93a3; --accent:#4f8cff; --ok:#3fb950; --bad:#f85149; }
+  :root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --text:#e6e9ef; --muted:#8b93a3; --accent:#4f8cff; --ok:#7ee787; --bad:#ff8a80; }
   * { box-sizing: border-box; }
   body { margin:0; font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
   header { padding:16px 24px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
@@ -28,9 +28,10 @@
   .badge.failed  { color:var(--bad); border-color:var(--bad); }
   .badge.running { color:var(--accent); border-color:var(--accent); }
   pre { background:#0d1016; border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto; max-height:420px; margin:12px 0 0; }
-  .hidden { display:none; }
-
   /* ---- 修复前后对比 ---- */
+  .diff-controls { margin-top:14px; }
+  .diff-filter { display:inline-flex; align-items:center; gap:6px; margin:0; cursor:pointer; }
+  .diff-filter input { accent-color:var(--accent); }
   .diff { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
   @media (max-width:900px) { .diff { grid-template-columns:1fr; } }
   .diff-col { min-width:0; }
@@ -41,13 +42,20 @@
   .code .line { display:flex; }
   .code .ln { flex:0 0 46px; text-align:right; padding:0 8px; color:#4a5160; user-select:none; }
   .code .tx { flex:1; padding:0 8px; white-space:pre; }
-  .line.del .tx { background:rgba(248,81,73,.13); }
-  .line.ins .tx { background:rgba(63,185,80,.13); }
+  .line.del .tx { background:#402427; color:var(--bad); }
+  .line.ins .tx { background:#193326; color:var(--ok); }
   .line.del .ln { color:var(--bad); }
   .line.ins .ln { color:var(--ok); }
+  .line.del .ln::before { content:"−"; float:left; }
+  .line.ins .ln::before { content:"+"; float:left; }
+  .diff.changes-only .line.same { display:none; }
   .legend { font-size:12px; color:var(--muted); margin-top:8px; }
   .legend b { color:var(--bad); font-weight:600; }
   .legend i { color:var(--ok); font-style:normal; font-weight:600; }
+  .task-history { list-style:none; margin:0; padding:0; }
+  .task-history li { display:flex; justify-content:space-between; gap:16px; padding:8px 0; overflow-wrap:anywhere; }
+  .task-history li + li { border-top:1px solid var(--line); }
+  .hidden { display:none; }
 </style>
 </head>
 <body>
@@ -103,6 +111,10 @@
       <span id="task-msg" class="muted"></span>
     </div>
 
+    <div class="row diff-controls hidden" id="diff-controls">
+      <label class="diff-filter"><input type="checkbox" id="only-changes" aria-controls="diff">只看改动</label>
+      <span class="muted" id="diff-note" role="status"></span>
+    </div>
     <div class="diff hidden" id="diff">
       <div class="diff-col">
         <div class="diff-head">原始代码 <span class="tag" id="orig-name"></span></div>
@@ -120,13 +132,21 @@
     <pre id="output" class="hidden"></pre>
   </section>
 
+  <section class="panel hidden" id="history-panel">
+    <h2>任务历史</h2>
+    <div id="history-msg" class="muted" role="status"></div>
+    <ul id="history-list" class="task-history"></ul>
+  </section>
+
 </main>
 
 <script>
 const $ = (id) => document.getElementById(id);
 let token = localStorage.getItem("token") || "";
+let historyRequest;
 
 function setToken(next) {
+  historyRequest?.abort();
   token = next || "";
   if (token) localStorage.setItem("token", token);
   else localStorage.removeItem("token");
@@ -139,10 +159,14 @@ function setMsg(el, text, bad) {
 }
 
 async function api(path, options = {}) {
+  const requestToken = token;
   const headers = options.headers || {};
-  if (token) headers["Authorization"] = "Bearer " + token;
+  if (requestToken) headers["Authorization"] = "Bearer " + requestToken;
   const res = await fetch(path, { ...options, headers });
-  if (res.status === 401) { setToken(""); throw new Error("请先登录"); }
+  if (res.status === 401) {
+    if (requestToken === token && !options.signal?.aborted) setToken("");
+    throw new Error("请先登录");
+  }
   if (!res.ok) {
     let detail = res.statusText;
     try { detail = (await res.json()).detail || detail; } catch (e) {}
@@ -155,16 +179,54 @@ function render() {
   const loggedIn = Boolean(token);
   $("auth").classList.toggle("hidden", loggedIn);
   $("upload-panel").classList.toggle("hidden", !loggedIn);
+  $("history-panel").classList.toggle("hidden", !loggedIn);
   $("logout").classList.toggle("hidden", !loggedIn);
-  if (!loggedIn) { $("who").textContent = ""; $("result-panel").classList.add("hidden"); }
+  if (!loggedIn) {
+    $("who").textContent = "";
+    $("result-panel").classList.add("hidden");
+    $("history-list").replaceChildren();
+    setMsg($("history-msg"), "");
+  }
 }
 
 async function refreshMe() {
   if (!token) return;
+  const currentToken = token;
   try {
     const me = await api("/auth/me");
+    if (currentToken !== token) return;
     $("who").textContent = me.email;
-  } catch (e) { setToken(""); }
+    refreshHistory();
+  } catch (e) { if (currentToken === token) setToken(""); }
+}
+
+async function refreshHistory() {
+  if (!token) return;
+  historyRequest?.abort();
+  historyRequest = new AbortController();
+  const { signal } = historyRequest;
+
+  const list = $("history-list");
+  const message = $("history-msg");
+  if (!list.childElementCount) setMsg(message, "正在加载任务历史…");
+  try {
+    const tasks = await api("/tasks", { signal });
+    if (signal.aborted) return;
+    const items = tasks.map((task) => {
+      const item = document.createElement("li");
+      const filename = document.createElement("span");
+      filename.textContent = task.filename;
+      const number = document.createElement("span");
+      number.className = "muted";
+      number.textContent = `#${task.id}`;
+      item.append(filename, number);
+      return item;
+    });
+    list.replaceChildren(...items);
+    setMsg(message, items.length ? "" : "还没有上传过文件。");
+  } catch (e) {
+    if (!signal.aborted) setMsg(message, `任务历史加载失败：${e.message}`, true);
+  }
 }
 
 async function auth(endpoint) {
@@ -201,9 +263,11 @@ async function submit() {
     const task = await api("/tasks", { method: "POST", body: form });
     setMsg($("upload-msg"), `已创建任务 #${task.id} · ${file.name}（${file.size} 字节）`);
     $("result-panel").classList.remove("hidden");
+    $("diff-controls").classList.add("hidden");
     $("diff").classList.add("hidden");
     $("legend").classList.add("hidden");
     $("output").classList.add("hidden");
+    refreshHistory();
     poll(task.id);
   } catch (e) { setMsg($("upload-msg"), e.message, true); }
 }
@@ -277,18 +341,28 @@ function cell(side) {
   return div;
 }
 
+function updateDiffFilter() {
+  const filter = $("only-changes");
+  const diff = $("diff");
+  const changesOnly = filter.checked && !filter.disabled;
+  const hasChanges = Boolean(diff.querySelector(".line.del, .line.ins"));
+  diff.classList.toggle("changes-only", changesOnly);
+  diff.classList.toggle("hidden", changesOnly && !hasChanges);
+  $("legend").classList.toggle("hidden", !hasChanges);
+  $("diff-note").textContent = filter.disabled ? "文件较大，显示完整代码。"
+    : changesOnly && !hasChanges ? "没有改动。" : "";
+}
+
 function renderDiff(beforeText, afterText) {
-  const before = beforeText.split("\n");
-  const after = afterText.split("\n");
+  const before = beforeText.split(/\r\n|\n|\r/);
+  const after = afterText.split(/\r\n|\n|\r/);
 
   const ops = lcsDiff(before, after);
   const rows = ops
     ? alignRows(ops)
-    : before.map((line, idx) => ({
-        l: { no: idx + 1, text: line, cls: "same" },
-        r: after[idx] === undefined
-          ? null
-          : { no: idx + 1, text: after[idx], cls: line === after[idx] ? "same" : "ins" },
+    : Array.from({ length: Math.max(before.length, after.length) }, (_, idx) => ({
+        l: idx < before.length ? { no: idx + 1, text: before[idx], cls: "same" } : null,
+        r: idx < after.length ? { no: idx + 1, text: after[idx], cls: "same" } : null,
       }));
 
   const leftBox = $("code-before");
@@ -300,8 +374,9 @@ function renderDiff(beforeText, afterText) {
     rightBox.append(cell(row.r));
   }
 
-  $("diff").classList.remove("hidden");
-  $("legend").classList.remove("hidden");
+  $("only-changes").disabled = !ops;
+  $("diff-controls").classList.remove("hidden");
+  updateDiffFilter();
   $("output").classList.add("hidden");
 }
 
@@ -335,6 +410,7 @@ $("login").onclick = () => auth("login");
 $("register").onclick = () => auth("register");
 $("submit").onclick = submit;
 $("logout").onclick = () => setToken("");
+$("only-changes").addEventListener("change", updateDiffFilter);
 $("password").addEventListener("keydown", (e) => { if (e.key === "Enter") auth("login"); });
 
 render();
