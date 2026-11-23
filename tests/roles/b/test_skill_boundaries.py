@@ -90,3 +90,29 @@ def test_memory_clear():
     mem.add("assistant", "hi")
     mem.clear()
     assert mem.recent() == []
+
+# ==========================================
+# Day 4 新增：find 技能测试
+# ==========================================
+
+def test_find_normal(ws):
+    """1. 正常找到"""
+    # ws 里自带 pkg/mod.py
+    result = ws.find("*.py")
+    assert "pkg/mod.py" in result
+
+def test_find_not_found(ws):
+    """2. 找不到"""
+    result = ws.find("*.cpp")
+    assert "没找到匹配" in result
+
+def test_find_invalid_pattern(ws):
+    """3. 模式不合法 (空字符串)"""
+    result = ws.find("")
+    # 根据代码，空字符串会返回用法提示
+    assert "用法：" in result or "没找到匹配" in result
+
+def test_find_path_traversal(ws):
+    """4. 越界拦截"""
+    with pytest.raises(PermissionError):
+        ws.find("*.py in ../outside")
