@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>代码修复代理</title>
 <style>
-  :root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --text:#e6e9ef; --muted:#8b93a3; --accent:#4f8cff; --ok:#3fb950; --bad:#f85149; }
+  :root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --text:#e6e9ef; --muted:#8b93a3; --accent:#4f8cff; --ok:#7ee787; --bad:#ff8a80; }
   * { box-sizing: border-box; }
   body { margin:0; font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
   header { padding:16px 24px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
   header h1 { font-size:16px; margin:0; font-weight:600; }
-  main { max-width:960px; margin:0 auto; padding:24px; display:grid; gap:16px; }
+  main { max-width:1200px; margin:0 auto; padding:24px; display:grid; gap:16px; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:20px; }
   .panel h2 { margin:0 0 12px; font-size:14px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
   label { display:block; margin-bottom:10px; }
@@ -22,11 +22,42 @@
   button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
   .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .muted { color:var(--muted); }
+  #upload-msg { overflow-wrap:anywhere; }
   .badge { padding:2px 8px; border-radius:99px; font-size:12px; border:1px solid var(--line); }
   .badge.success { color:var(--ok); border-color:var(--ok); }
   .badge.failed  { color:var(--bad); border-color:var(--bad); }
   .badge.running { color:var(--accent); border-color:var(--accent); }
+  .task-message { margin:12px 0 0; padding:8px 12px; background:#0d1016; border-radius:6px; overflow-wrap:anywhere; }
+  .task-message:empty { display:none; }
+  .task-message[data-status=failed] { color:var(--bad); }
   pre { background:#0d1016; border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto; max-height:420px; margin:12px 0 0; }
+  /* ---- 修复前后对比 ---- */
+  .diff-controls { margin-top:14px; }
+  .diff-filter { display:inline-flex; align-items:center; gap:6px; margin:0; cursor:pointer; }
+  .diff-filter input { accent-color:var(--accent); }
+  .diff { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+  @media (max-width:900px) { .diff { grid-template-columns:1fr; } }
+  .diff-col { min-width:0; }
+  .diff-head { font-size:12px; color:var(--muted); margin-bottom:6px; display:flex; gap:8px; align-items:center; }
+  .diff-head .tag { padding:1px 7px; border-radius:99px; border:1px solid var(--line); font-size:11px; }
+  .code { background:#0d1016; border:1px solid var(--line); border-radius:8px; overflow:auto; max-height:460px;
+          font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,"Courier New",monospace; }
+  .code .line { display:flex; }
+  .code .ln { flex:0 0 46px; text-align:right; padding:0 8px; color:#4a5160; user-select:none; }
+  .code .tx { flex:1; padding:0 8px; white-space:pre; }
+  .line.del .tx { background:#402427; color:var(--bad); }
+  .line.ins .tx { background:#193326; color:var(--ok); }
+  .line.del .ln { color:var(--bad); }
+  .line.ins .ln { color:var(--ok); }
+  .line.del .ln::before { content:"−"; float:left; }
+  .line.ins .ln::before { content:"+"; float:left; }
+  .diff.changes-only .line.same { display:none; }
+  .legend { font-size:12px; color:var(--muted); margin-top:8px; }
+  .legend b { color:var(--bad); font-weight:600; }
+  .legend i { color:var(--ok); font-style:normal; font-weight:600; }
+  .task-history { list-style:none; margin:0; padding:0; }
+  .task-history li { display:flex; justify-content:space-between; gap:16px; padding:8px 0; overflow-wrap:anywhere; }
+  .task-history li + li { border-top:1px solid var(--line); }
   .hidden { display:none; }
 </style>
 </head>
@@ -68,7 +99,7 @@
     <div class="row">
       <input type="file" id="file" accept=".py">
       <button id="submit">开始修复</button>
-      <span id="upload-msg" class="muted"></span>
+      <span id="upload-msg" class="muted" role="status"></span>
     </div>
   </section>
 
@@ -80,18 +111,49 @@
       <span id="status" class="badge">—</span>
       <span class="muted">轮数</span>
       <span id="iters">—</span>
-      <span id="task-msg" class="muted"></span>
     </div>
+    <p id="task-msg" class="task-message" role="status"></p>
+
+    <div class="row diff-controls hidden" id="diff-controls">
+      <label class="diff-filter"><input type="checkbox" id="only-changes" aria-controls="diff">只看改动</label>
+      <span class="muted" id="diff-note" role="status"></span>
+    </div>
+    <div class="diff hidden" id="diff">
+      <div class="diff-col">
+        <div class="diff-head">原始代码 <span class="tag" id="orig-name"></span></div>
+        <div class="code" id="code-before"></div>
+      </div>
+      <div class="diff-col">
+        <div class="diff-head">修复后 <span class="tag" id="fixed-tag">1 轮</span></div>
+        <div class="code" id="code-after"></div>
+      </div>
+    </div>
+    <div class="legend hidden" id="legend">
+      红色是删掉的行，绿色是新增/改动的行。
+    </div>
+
     <pre id="output" class="hidden"></pre>
+  </section>
+
+  <section class="panel hidden" id="history-panel">
+    <h2>任务历史</h2>
+    <div id="history-msg" class="muted" role="status"></div>
+    <ul id="history-list" class="task-history"></ul>
   </section>
 
 </main>
 
 <script>
 const $ = (id) => document.getElementById(id);
+const POLL_INTERVAL_MS = 400;
+const POLL_TIMEOUT_MS = 120_000;
 let token = localStorage.getItem("token") || "";
+let historyRequest;
+let repairPoll;
 
 function setToken(next) {
+  historyRequest?.abort();
+  repairPoll?.abort();
   token = next || "";
   if (token) localStorage.setItem("token", token);
   else localStorage.removeItem("token");
@@ -104,10 +166,14 @@ function setMsg(el, text, bad) {
 }
 
 async function api(path, options = {}) {
+  const requestToken = token;
   const headers = options.headers || {};
-  if (token) headers["Authorization"] = "Bearer " + token;
+  if (requestToken) headers["Authorization"] = "Bearer " + requestToken;
   const res = await fetch(path, { ...options, headers });
-  if (res.status === 401) { setToken(""); throw new Error("请先登录"); }
+  if (res.status === 401) {
+    if (requestToken === token && !options.signal?.aborted) setToken("");
+    throw new Error("请先登录");
+  }
   if (!res.ok) {
     let detail = res.statusText;
     try { detail = (await res.json()).detail || detail; } catch (e) {}
@@ -120,16 +186,54 @@ function render() {
   const loggedIn = Boolean(token);
   $("auth").classList.toggle("hidden", loggedIn);
   $("upload-panel").classList.toggle("hidden", !loggedIn);
+  $("history-panel").classList.toggle("hidden", !loggedIn);
   $("logout").classList.toggle("hidden", !loggedIn);
-  if (!loggedIn) { $("who").textContent = ""; $("result-panel").classList.add("hidden"); }
+  if (!loggedIn) {
+    $("who").textContent = "";
+    $("result-panel").classList.add("hidden");
+    $("history-list").replaceChildren();
+    setMsg($("history-msg"), "");
+  }
 }
 
 async function refreshMe() {
   if (!token) return;
+  const currentToken = token;
   try {
     const me = await api("/auth/me");
+    if (currentToken !== token) return;
     $("who").textContent = me.email;
-  } catch (e) { setToken(""); }
+    refreshHistory();
+  } catch (e) { if (currentToken === token) setToken(""); }
+}
+
+async function refreshHistory() {
+  if (!token) return;
+  historyRequest?.abort();
+  historyRequest = new AbortController();
+  const { signal } = historyRequest;
+
+  const list = $("history-list");
+  const message = $("history-msg");
+  if (!list.childElementCount) setMsg(message, "正在加载任务历史…");
+  try {
+    const tasks = await api("/tasks", { signal });
+    if (signal.aborted) return;
+    const items = tasks.map((task) => {
+      const item = document.createElement("li");
+      const filename = document.createElement("span");
+      filename.textContent = task.filename;
+      const number = document.createElement("span");
+      number.className = "muted";
+      number.textContent = `#${task.id}`;
+      item.append(filename, number);
+      return item;
+    });
+    list.replaceChildren(...items);
+    setMsg(message, items.length ? "" : "还没有上传过文件。");
+  } catch (e) {
+    if (!signal.aborted) setMsg(message, `任务历史加载失败：${e.message}`, true);
+  }
 }
 
 async function auth(endpoint) {
@@ -159,15 +263,31 @@ async function submit() {
   const file = $("file").files[0];
   if (!file) return setMsg($("upload-msg"), "先选一个 .py 文件", true);
 
+  const currentToken = token;
+  const submitButton = $("submit");
   const form = new FormData();
   form.append("file", file);
+  submitButton.disabled = true;
   setMsg($("upload-msg"), "上传中…");
   try {
     const task = await api("/tasks", { method: "POST", body: form });
-    setMsg($("upload-msg"), "已创建任务 #" + task.id);
+    if (currentToken !== token) return;
+    repairPoll?.abort();
+    repairPoll = new AbortController();
+    setMsg($("upload-msg"), `已创建任务 #${task.id} · ${file.name}（${file.size} 字节）`);
     $("result-panel").classList.remove("hidden");
-    poll(task.id);
-  } catch (e) { setMsg($("upload-msg"), e.message, true); }
+    $("diff-controls").classList.add("hidden");
+    $("diff").classList.add("hidden");
+    $("legend").classList.add("hidden");
+    $("output").classList.add("hidden");
+    paint(task);
+    refreshHistory();
+    poll(task.id, repairPoll.signal);
+  } catch (e) {
+    if (currentToken === token) setMsg($("upload-msg"), e.message, true);
+  } finally {
+    submitButton.disabled = false;
+  }
 }
 
 function paint(task) {
@@ -175,30 +295,152 @@ function paint(task) {
   status.textContent = task.status;
   status.className = "badge " + task.status;
   $("iters").textContent = task.iterations || "—";
-  $("task-msg").textContent = task.message || "";
-  if (task.result) {
+  $("fixed-tag").textContent = (task.iterations || 1) + " 轮";
+
+  const progress = $("task-msg");
+  let message = task.message || "";
+  if (!message && task.status === "pending") message = "任务已排队…";
+  if (!message && task.status === "running") message = "正在修复…";
+  progress.dataset.status = task.status;
+  if (progress.textContent !== message) progress.textContent = message;
+
+  if (task.status === "failed" && task.result) {
     $("output").classList.remove("hidden");
     $("output").textContent = task.result;
   }
 }
 
-async function poll(id) {
-  let attempts = 0;
-  while (attempts++ < 120) {
-    try {
-      const task = await api("/tasks/" + id);
-      paint(task);
-      if (task.status === "success" || task.status === "failed") return;
-    } catch (e) { setMsg($("upload-msg"), e.message, true); return; }
-    await new Promise((r) => setTimeout(r, 1000));
+/* ---------- 行级 diff（LCS），够用且不引依赖 ---------- */
+function lcsDiff(a, b) {
+  const n = a.length, m = b.length;
+  if (n * m > 2_000_000) return null;  // 太大就放弃 diff，退回并排显示
+
+  const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j]
+        ? dp[i + 1][j + 1] + 1
+        : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
   }
-  setMsg($("upload-msg"), "等待超时", true);
+
+  const ops = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { ops.push({ type: "same", left: a[i], right: b[j] }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ type: "del", left: a[i] }); i++; }
+    else { ops.push({ type: "ins", right: b[j] }); j++; }
+  }
+  while (i < n) ops.push({ type: "del", left: a[i++] });
+  while (j < m) ops.push({ type: "ins", right: b[j++] });
+  return ops;
+}
+
+function alignRows(ops) {
+  const rows = [];
+  let leftNo = 1, rightNo = 1;
+  for (const op of ops) {
+    if (op.type === "same") {
+      rows.push({ l: { no: leftNo++, text: op.left, cls: "same" },
+                  r: { no: rightNo++, text: op.right, cls: "same" } });
+    } else if (op.type === "del") {
+      rows.push({ l: { no: leftNo++, text: op.left, cls: "del" }, r: null });
+    } else {
+      rows.push({ l: null, r: { no: rightNo++, text: op.right, cls: "ins" } });
+    }
+  }
+  return rows;
+}
+
+function cell(side) {
+  const div = document.createElement("div");
+  div.className = "line " + (side ? side.cls : "");
+  const no = document.createElement("span");
+  no.className = "ln";
+  no.textContent = side ? side.no : "";
+  const tx = document.createElement("span");
+  tx.className = "tx";
+  tx.textContent = side ? side.text : "";
+  div.append(no, tx);
+  return div;
+}
+
+function updateDiffFilter() {
+  const filter = $("only-changes");
+  const diff = $("diff");
+  const changesOnly = filter.checked && !filter.disabled;
+  const hasChanges = Boolean(diff.querySelector(".line.del, .line.ins"));
+  diff.classList.toggle("changes-only", changesOnly);
+  diff.classList.toggle("hidden", changesOnly && !hasChanges);
+  $("legend").classList.toggle("hidden", !hasChanges);
+  $("diff-note").textContent = filter.disabled ? "文件较大，显示完整代码。"
+    : changesOnly && !hasChanges ? "没有改动。" : "";
+}
+
+function renderDiff(beforeText, afterText) {
+  const before = beforeText.split(/\r\n|\n|\r/);
+  const after = afterText.split(/\r\n|\n|\r/);
+
+  const ops = lcsDiff(before, after);
+  const rows = ops
+    ? alignRows(ops)
+    : Array.from({ length: Math.max(before.length, after.length) }, (_, idx) => ({
+        l: idx < before.length ? { no: idx + 1, text: before[idx], cls: "same" } : null,
+        r: idx < after.length ? { no: idx + 1, text: after[idx], cls: "same" } : null,
+      }));
+
+  const leftBox = $("code-before");
+  const rightBox = $("code-after");
+  leftBox.replaceChildren();
+  rightBox.replaceChildren();
+  for (const row of rows) {
+    leftBox.append(cell(row.l));
+    rightBox.append(cell(row.r));
+  }
+
+  $("only-changes").disabled = !ops;
+  $("diff-controls").classList.remove("hidden");
+  updateDiffFilter();
+  $("output").classList.add("hidden");
+}
+
+async function poll(id, signal) {
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  while (!signal.aborted && Date.now() < deadline) {
+    try {
+      const task = await api(`/tasks/${id}`, { signal });
+      if (signal.aborted) return;
+      paint(task);
+      if (task.status === "success" || task.status === "failed") {
+        if (task.status === "success") {
+          try {
+            const original = await api(`/tasks/${id}/original`, { signal });
+            if (signal.aborted) return;
+            $("orig-name").textContent = original.filename || "";
+            renderDiff(original.content, task.result || "");
+          } catch (e) {
+            if (signal.aborted) return;
+            // 拿不到原始代码就退回只显示结果，不影响主流程
+            $("output").classList.remove("hidden");
+            $("output").textContent = task.result || "";
+          }
+        }
+        return;
+      }
+    } catch (e) {
+      if (!signal.aborted) setMsg($("upload-msg"), e.message, true);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
+  if (!signal.aborted) setMsg($("upload-msg"), "等待超时", true);
 }
 
 $("login").onclick = () => auth("login");
 $("register").onclick = () => auth("register");
 $("submit").onclick = submit;
 $("logout").onclick = () => setToken("");
+$("only-changes").addEventListener("change", updateDiffFilter);
 $("password").addEventListener("keydown", (e) => { if (e.key === "Enter") auth("login"); });
 
 render();

@@ -279,6 +279,20 @@ def check(
     if branch_role and not branch_role.configured_owner:
         warnings.append(f"角色 {branch_role.id} 还没在 roles.json 里填 github，跳过提交人核对。")
 
+    # 角色分支必须由该角色本人推送。
+    # 没这一条的话，任何人都能往 course/a 上推——路径检查只挡住「改错目录」，
+    # 挡不住「冒充别人」。
+    if (
+        branch_role
+        and branch_role.configured_owner
+        and author
+        and author.casefold() != (branch_role.github or "").casefold()
+    ):
+        violations.append(
+            f"`{branch}` 属于角色 {branch_role.id}（负责人 {branch_role.github}），"
+            f"当前提交人：{author}。"
+        )
+
     # 组长分支（main / ops/*）：只核对提交人，不限制路径。
     # 组长是集成者，合并冲突、搭骨架、改公共夹具都要靠他。
     privileged = is_main or is_ops

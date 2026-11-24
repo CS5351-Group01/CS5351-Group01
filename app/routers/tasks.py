@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
@@ -65,3 +66,32 @@ def get_task(
     if task is None or task.owner_id != current.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
     return task
+
+
+@router.get("/tasks/{task_id}/original")
+def get_task_original(
+    task_id: int,
+    current: Annotated[models.User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """返回上传时的原始代码，供前端做「修复前后对比」。
+
+    注意：task.stored_path 是服务器上的绝对路径，**绝不能返回给前端**，
+    只返回文件内容本身。
+    """
+    task = db.get(models.Task, task_id)
+    if task is None or task.owner_id != current.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+
+    path = Path(task.stored_path)
+    if not path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="原始文件已不存在")
+
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="读取原始文件失败"
+        ) from exc
+
+    return {"filename": task.filename, "content": content}
