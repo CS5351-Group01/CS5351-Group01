@@ -263,3 +263,28 @@ def test_failure_reason_is_empty_when_passed(tmp_path):
 
     assert result.passed is True
     assert result.failure_reason() == ""
+
+
+# ------------------------------------------- Day 6：预算在「多轮循环」里的行为
+def test_budget_blocks_later_iterations_after_exhaustion(tmp_path):
+    """模拟修复循环：第一轮把预算烧完后，后续轮次必须拒绝再起进程。
+
+    这条测的是「闸」在任务级的表现 —— 即使上层忘了看 timed_out、继续循环，
+    也不会再拉起新的 pytest 进程。
+    """
+    (tmp_path / "test_spin.py").write_text(
+        "def test_spin():\n    while True:\n        pass\n",
+        encoding="utf-8",
+    )
+
+    budget = TimeBudget(2.0)
+    results = [run_pytest(tmp_path, timeout=60, budget=budget) for _ in range(3)]
+
+    # 第 1 轮：真的跑了，被预算掐断
+    assert results[0].timed_out is True
+    assert results[0].duration_ms > 0
+    # 第 2、3 轮：预算已耗尽，不再启动子进程
+    assert results[1].duration_ms == 0
+    assert results[2].duration_ms == 0
+    assert all("预算" in r.stderr for r in results)
+    assert budget.elapsed < 8
