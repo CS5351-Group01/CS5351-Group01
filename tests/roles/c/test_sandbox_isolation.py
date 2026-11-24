@@ -237,3 +237,29 @@ def test_total_bytes_limit_raises(tmp_path, monkeypatch):
     with pytest.raises(SandboxError):
         with SandboxWorkspace(src):
             pass
+
+
+# ------------------------------------------------- Day 5：失败要说得出原因
+def test_failure_reason_explains_budget_exhaustion(tmp_path):
+    """预算耗尽时，failure_reason() 必须给出能直接展示给用户的原因。"""
+    budget = TimeBudget(0.2)
+    time.sleep(0.35)
+
+    result = run_pytest(tmp_path, timeout=60, budget=budget)
+
+    assert result.passed is False
+    reason = result.failure_reason()
+    assert "预算" in reason
+    assert "中止" in reason
+
+
+def test_failure_reason_is_empty_when_passed(tmp_path):
+    """通过的任务没有失败原因，避免前端显示一条空错误。"""
+    (tmp_path / "test_ok.py").write_text(
+        "def test_ok():\n    assert 1 + 1 == 2\n", encoding="utf-8"
+    )
+
+    result = run_pytest(tmp_path, timeout=60)
+
+    assert result.passed is True
+    assert result.failure_reason() == ""

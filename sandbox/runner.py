@@ -31,6 +31,19 @@ class RunResult:
         tail = (self.stdout or self.stderr).strip().splitlines()
         return tail[-1] if tail else f"exit={self.exit_code}"
 
+    def failure_reason(self) -> str:
+        """一句话说明「为什么失败」，供上层直接写进任务的 message 字段。
+
+        · 通过 → 空字符串
+        · 超时 / 预算耗尽 → stderr 里的原因（「总时间预算 120s 已用完，任务中止」）
+        · 其它失败 → pytest 的结论行
+        """
+        if self.passed:
+            return ""
+        if self.timed_out:
+            return self.stderr.strip() or self.summary
+        return self.summary
+
     def as_feedback(self) -> str:
         """给模型看的失败信息，裁剪到合理长度（带「已截断」标记）。"""
         body, _ = truncate_output((self.stdout + "\n" + self.stderr).strip())
