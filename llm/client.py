@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import urllib.error
 import urllib.request
 from typing import Protocol
@@ -127,7 +128,29 @@ class OpenAICompatClient:
 
 
 def default_client() -> LLMClient:
-    """有 key 用真模型，没 key 退化成假模型，保证本地能跑。"""
+    """有 key 用真模型，没 key 退化成假模型。
+
+    ⚠️ 降级必须**发出声音**。静默降级会让「实验 100% 通过」变成假数据，
+    而报告里完全看不出来——D 在 Week 12 就差点踩这个坑：
+    环境变量没生效，跑出来 5/5，耗时却和假模型一模一样。
+
+    所以这里既打印警告，又把名字暴露出去，让 eval 层能记录到报告里。
+    """
     if os.environ.get("LLM_API_KEY"):
         return OpenAICompatClient()
+    print(
+        "[警告] 没有 LLM_API_KEY，本次使用 FakeLLM。\n"
+        "       FakeLLM 只会修 examples/ 里预置的那几个 bug，\n"
+        "       这份结果**不能**当作真模型的能力。",
+        file=sys.stderr,
+    )
     return FakeLLM()
+
+
+def describe_client(client: LLMClient) -> str:
+    """给实验报告用的一句话身份说明，防止「跑的是假模型却写进真模型报告」。"""
+    name = getattr(client, "name", client.__class__.__name__)
+    model = getattr(client, "model", None)
+    if model:
+        return f"{name} (model={model})"
+    return name
