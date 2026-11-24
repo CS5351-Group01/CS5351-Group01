@@ -123,3 +123,74 @@ C_WEEK12_DAY4: PASS
 3. **输出上限按字符数算，不是字节数**。中文内容时实际占用会更大。
 4. 预算的粒度是「每次 `run_pytest`」，不是「每秒检查一次」——所以最坏情况是
    「剩余预算 0.1s 但本次调用刚好在 0.1s 内结束」，不会立刻中止。
+
+---
+
+# Day 5 补充：把「失败原因」变成可以直接展示的一句话
+
+组长这轮的要求是「超了标记 failed **并说明原因**」。
+`RunResult` 原来有两个口子：`summary`（超时只会给一个「超时」二字）和 `as_feedback()`（给模型看的，
+带一长串 pytest 输出）。都不适合直接写进前端/数据库的 message 字段。
+
+所以加了 `RunResult.failure_reason()`：
+
+```python
+result = run_pytest(ws.root, timeout=60, budget=budget)
+if not result.passed:
+    task.message = result.failure_reason()   # 例：总时间预算 120s 已用完，任务中止
+    task.status  = "failed"
+```
+
+| 情况 | `failure_reason()` 返回 |
+|---|---|
+| 通过 | `""`（空字符串，前端不会显示一条空错误） |
+| 超时 / 预算耗尽 | `stderr` 里的原因，例如「总时间预算 120s 已用完，任务中止」 |
+| 测试失败 | pytest 的结论行，例如「1 failed, 2 passed in 0.12s」 |
+
+配套 2 条测试：
+
+- `test_failure_reason_explains_budget_exhaustion` —— 预算耗尽的返回里必须同时出现「预算」和「中止」；
+- `test_failure_reason_is_empty_when_passed` —— 通过的任务必须返回空字符串。
+
+## Day 5 实际跑了什么
+
+同步并合并 main（按要求用普通 merge，会产生 merge commit）：
+
+```text
+PS D:\Projects\SE_project\CS5351-Group01> git fetch origin
+   dc733d0..0d3ed95  course/a  -> origin/course/a
+   26eeaae..59ae66c  main      -> origin/main
+PS D:\Projects\SE_project\CS5351-Group01> git merge origin/main
+Merge made by the 'ort' strategy.
+ ... 10 files changed, 389 insertions(+), 21 deletions(-)
+```
+
+本层连跑 3 次：
+
+```text
+PS D:\Projects\SE_project\CS5351-Group01> 1..3 | ForEach-Object { .\.venv\Scripts\python.exe -m pytest tests/roles/c -q }
+===== 第 1 次 =====
+27 passed in 8.55s
+===== 第 2 次 =====
+27 passed in 8.66s
+===== 第 3 次 =====
+27 passed in 8.55s
+```
+
+全量回归：
+
+```text
+PS D:\Projects\SE_project\CS5351-Group01> .\.venv\Scripts\python.exe -m pytest tests -q
+98 passed, 1 warning in 33.12s
+```
+
+## Day 5 结果
+
+```text
+C_WEEK12_DAY5: PASS
+```
+
+- 本层用例：27 个（Day 4 的 25 + 今天 2），连跑 3 次全绿
+- 合并 main 后全量：98 passed
+- 提交：`f907ebc`（`feat(sandbox): expose failure_reason for task messages`）
+
