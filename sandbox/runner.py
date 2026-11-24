@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-MAX_OUTPUT = 8_000
+from sandbox.limits import MAX_OUTPUT, TimeBudget, truncate_output
 
 
 @dataclass
@@ -22,6 +22,7 @@ class RunResult:
     stderr: str
     duration_ms: int
     timed_out: bool = False
+    truncated: bool = False
 
     @property
     def summary(self) -> str:
@@ -30,23 +31,56 @@ class RunResult:
         tail = (self.stdout or self.stderr).strip().splitlines()
         return tail[-1] if tail else f"exit={self.exit_code}"
 
+    def failure_reason(self) -> str:
+        """一句话说明「为什么失败」，供上层直接写进任务的 message 字段。
+
+        · 通过 → 空字符串
+        · 超时 / 预算耗尽 → stderr 里的原因（「总时间预算 120s 已用完，任务中止」）
+        · 其它失败 → pytest 的结论行
+        """
+        if self.passed:
+            return ""
+        if self.timed_out:
+            return self.stderr.strip() or self.summary
+        return self.summary
+
     def as_feedback(self) -> str:
-        """给模型看的失败信息，裁剪到合理长度。"""
-        body = (self.stdout + "\n" + self.stderr).strip()
-        if len(body) > MAX_OUTPUT:
-            body = body[-MAX_OUTPUT:]
+        """给模型看的失败信息，裁剪到合理长度（带「已截断」标记）。"""
+        body, _ = truncate_output((self.stdout + "\n" + self.stderr).strip())
         return f"exit_code={self.exit_code}\n{body}"
 
 
-def run_pytest(root: Path | str, target: str | None = None, timeout: float = 60.0) -> RunResult:
+def run_pytest(
+    root: Path | str,
+    target: str | None = None,
+    timeout: float = 60.0,
+    budget: TimeBudget | None = None,
+) -> RunResult:
     """在 root 目录里跑 pytest。
 
     参数：
       root    沙箱根目录
       target  只跑某个文件/目录（相对 root），None 表示全跑
-      timeout 秒
+      timeout 单次最长秒数
+      budget  整个修复任务的总时间预算；给了就取 min(timeout, 剩余预算)，
+              预算见底后不再启动子进程，直接判本轮失败
     """
     root = Path(root).resolve()
+
+    if budget is not None:
+        exhausted = f"总时间预算 {budget.total_seconds:g}s 已用完，任务中止"
+        if budget.expired:
+            return RunResult(
+                passed=False, exit_code=-1, stdout="", stderr=exhausted,
+                duration_ms=0, timed_out=True,
+            )
+        timeout = budget.clamp(timeout)
+        if timeout <= 0:
+            return RunResult(
+                passed=False, exit_code=-1, stdout="", stderr=exhausted,
+                duration_ms=0, timed_out=True,
+            )
+
     command = [
         sys.executable, "-m", "pytest",
         "-q", "--no-header",
@@ -68,20 +102,28 @@ def run_pytest(root: Path | str, target: str | None = None, timeout: float = 60.
             timeout=timeout,
         )
         elapsed = int((time.perf_counter() - started) * 1000)
+        stdout, out_cut = truncate_output(proc.stdout)
+        stderr, err_cut = truncate_output(proc.stderr)
         return RunResult(
             passed=proc.returncode == 0,
             exit_code=proc.returncode,
-            stdout=proc.stdout[-MAX_OUTPUT:],
-            stderr=proc.stderr[-MAX_OUTPUT:],
+            stdout=stdout,
+            stderr=stderr,
             duration_ms=elapsed,
+            truncated=out_cut or err_cut,
         )
     except subprocess.TimeoutExpired:
         elapsed = int((time.perf_counter() - started) * 1000)
+        timeout_msg = (
+            f"总时间预算 {budget.total_seconds:g}s 已用完，任务中止"
+            if budget is not None
+            else f"pytest 超过 {timeout} 秒未结束"
+        )
         return RunResult(
             passed=False,
             exit_code=-1,
             stdout="",
-            stderr=f"pytest 超过 {timeout} 秒未结束",
+            stderr=timeout_msg,
             duration_ms=elapsed,
             timed_out=True,
         )
@@ -120,10 +162,13 @@ def check_syntax(root: Path | str, target: str) -> RunResult:
             duration_ms=elapsed,
         )
     elapsed = int((time.perf_counter() - started) * 1000)
+    stdout, out_cut = truncate_output(proc.stdout)
+    stderr, err_cut = truncate_output(proc.stderr)
     return RunResult(
         passed=proc.returncode == 0,
         exit_code=proc.returncode,
-        stdout=proc.stdout[-MAX_OUTPUT:],
-        stderr=proc.stderr[-MAX_OUTPUT:],
+        stdout=stdout,
+        stderr=stderr,
         duration_ms=elapsed,
+        truncated=out_cut or err_cut,
     )
