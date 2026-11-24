@@ -108,6 +108,40 @@ class Workspace:
                     if len(hits) >= MAX_GREP_HITS:
                         return "\n".join(hits) + "\n...（截断）"
         return "\n".join(hits) or f"没找到：{keyword}"
+    
+    def find(self, argument: str) -> str:
+        """参数格式：`<模式>` 或 `<模式> in <子路径>`。按文件名/后缀找文件。"""
+        text = argument.strip()
+        if not text:
+            return "用法：find <模式> [in <子路径>]"
+        
+        if " in " in text:
+            pattern, _, sub = text.partition(" in ")
+            sub = sub.strip() or "."
+        else:
+            pattern, sub = text, "."
+            
+        base = self.path(sub)
+        if not base.exists():
+            return f"路径不存在：{sub}"
+
+        # 限制最多返回 100 条
+        MAX_FIND_HITS = 100
+        hits = []
+        
+        # 遍历搜索
+        if base.is_file():
+            if base.match(pattern):
+                hits.append(base.relative_to(self.root).as_posix())
+        else:
+            for p in base.rglob(pattern):
+                if p.is_file() and not (_SKIP_DIRS & set(p.parts)):
+                    hits.append(p.relative_to(self.root).as_posix())
+                    if len(hits) >= MAX_FIND_HITS:
+                        hits.append("...（截断）")
+                        break
+                        
+        return "\n".join(hits) or f"没找到匹配：{pattern}"    
 
     def write(self, argument: str) -> str:
         """参数格式：`<相对路径>\n<内容>`"""
@@ -133,5 +167,6 @@ class Skills:
             "ls": self.workspace.ls,
             "read": self.workspace.read,
             "grep": self.workspace.grep,
+            "find": self.workspace.find,
             "write": self.workspace.write,
         }
