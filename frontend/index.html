@@ -27,6 +27,9 @@
   .badge.success { color:var(--ok); border-color:var(--ok); }
   .badge.failed  { color:var(--bad); border-color:var(--bad); }
   .badge.running { color:var(--accent); border-color:var(--accent); }
+  .task-message { margin:12px 0 0; padding:8px 12px; background:#0d1016; border-radius:6px; overflow-wrap:anywhere; }
+  .task-message:empty { display:none; }
+  .task-message[data-status=failed] { color:var(--bad); }
   pre { background:#0d1016; border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto; max-height:420px; margin:12px 0 0; }
   /* ---- 修复前后对比 ---- */
   .diff-controls { margin-top:14px; }
@@ -108,8 +111,8 @@
       <span id="status" class="badge">—</span>
       <span class="muted">轮数</span>
       <span id="iters">—</span>
-      <span id="task-msg" class="muted"></span>
     </div>
+    <p id="task-msg" class="task-message" role="status"></p>
 
     <div class="row diff-controls hidden" id="diff-controls">
       <label class="diff-filter"><input type="checkbox" id="only-changes" aria-controls="diff">只看改动</label>
@@ -142,11 +145,15 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
+const POLL_INTERVAL_MS = 400;
+const POLL_TIMEOUT_MS = 120_000;
 let token = localStorage.getItem("token") || "";
 let historyRequest;
+let repairPoll;
 
 function setToken(next) {
   historyRequest?.abort();
+  repairPoll?.abort();
   token = next || "";
   if (token) localStorage.setItem("token", token);
   else localStorage.removeItem("token");
@@ -256,20 +263,31 @@ async function submit() {
   const file = $("file").files[0];
   if (!file) return setMsg($("upload-msg"), "先选一个 .py 文件", true);
 
+  const currentToken = token;
+  const submitButton = $("submit");
   const form = new FormData();
   form.append("file", file);
+  submitButton.disabled = true;
   setMsg($("upload-msg"), "上传中…");
   try {
     const task = await api("/tasks", { method: "POST", body: form });
+    if (currentToken !== token) return;
+    repairPoll?.abort();
+    repairPoll = new AbortController();
     setMsg($("upload-msg"), `已创建任务 #${task.id} · ${file.name}（${file.size} 字节）`);
     $("result-panel").classList.remove("hidden");
     $("diff-controls").classList.add("hidden");
     $("diff").classList.add("hidden");
     $("legend").classList.add("hidden");
     $("output").classList.add("hidden");
+    paint(task);
     refreshHistory();
-    poll(task.id);
-  } catch (e) { setMsg($("upload-msg"), e.message, true); }
+    poll(task.id, repairPoll.signal);
+  } catch (e) {
+    if (currentToken === token) setMsg($("upload-msg"), e.message, true);
+  } finally {
+    submitButton.disabled = false;
+  }
 }
 
 function paint(task) {
@@ -277,8 +295,14 @@ function paint(task) {
   status.textContent = task.status;
   status.className = "badge " + task.status;
   $("iters").textContent = task.iterations || "—";
-  $("task-msg").textContent = task.message || "";
   $("fixed-tag").textContent = (task.iterations || 1) + " 轮";
+
+  const progress = $("task-msg");
+  let message = task.message || "";
+  if (!message && task.status === "pending") message = "任务已排队…";
+  if (!message && task.status === "running") message = "正在修复…";
+  progress.dataset.status = task.status;
+  if (progress.textContent !== message) progress.textContent = message;
 
   if (task.status === "failed" && task.result) {
     $("output").classList.remove("hidden");
@@ -380,19 +404,22 @@ function renderDiff(beforeText, afterText) {
   $("output").classList.add("hidden");
 }
 
-async function poll(id) {
-  let attempts = 0;
-  while (attempts++ < 120) {
+async function poll(id, signal) {
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  while (!signal.aborted && Date.now() < deadline) {
     try {
-      const task = await api("/tasks/" + id);
+      const task = await api(`/tasks/${id}`, { signal });
+      if (signal.aborted) return;
       paint(task);
       if (task.status === "success" || task.status === "failed") {
         if (task.status === "success") {
           try {
-            const original = await api(`/tasks/${id}/original`);
+            const original = await api(`/tasks/${id}/original`, { signal });
+            if (signal.aborted) return;
             $("orig-name").textContent = original.filename || "";
             renderDiff(original.content, task.result || "");
           } catch (e) {
+            if (signal.aborted) return;
             // 拿不到原始代码就退回只显示结果，不影响主流程
             $("output").classList.remove("hidden");
             $("output").textContent = task.result || "";
@@ -400,10 +427,13 @@ async function poll(id) {
         }
         return;
       }
-    } catch (e) { setMsg($("upload-msg"), e.message, true); return; }
-    await new Promise((r) => setTimeout(r, 1000));
+    } catch (e) {
+      if (!signal.aborted) setMsg($("upload-msg"), e.message, true);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
-  setMsg($("upload-msg"), "等待超时", true);
+  if (!signal.aborted) setMsg($("upload-msg"), "等待超时", true);
 }
 
 $("login").onclick = () => auth("login");
