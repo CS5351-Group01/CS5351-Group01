@@ -19,4 +19,7 @@ def average(values: list[float]) -> float:
     """返回平均值，空列表返回 0.0。"""
     if not values:
         return 0.0
-    return sum(values) / len(values)
+    # 故意写成两行：避免和 examples/empty_input 里那一行的字面文本撞车，
+    # 否则假模型的全局替换会把这里也顺手改掉，产生一行「无谓改动」。
+    total = sum(values)
+    return total / len(values)
