@@ -67,4 +67,10 @@ def run_cases():
         print(f"  > {h}")
 
 if __name__ == "__main__":
-    run_cases()
+    import shutil
+    try:
+        run_cases()
+    finally:
+        # 无论成功失败，跑完立刻删掉临时目录，绝不留后患
+        if HARD_CASES_DIR.exists():
+            shutil.rmtree(HARD_CASES_DIR)
