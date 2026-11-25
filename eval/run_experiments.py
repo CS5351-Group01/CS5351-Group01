@@ -31,13 +31,33 @@ class CaseResult:
 
 
 def discover_cases() -> list[Path]:
-    """每个带 tests/ 的子目录算一个用例。"""
+    """每个带 tests/ 的目录算一个用例。
+
+    支持两层：`examples/<case>/` 和 `examples/hard/<case>/`。
+    难例单独放一层，是为了让「假模型修不了」成为一条**可断言的测试**，
+    而不是让 F 的回归测试集体变红。
+    """
     if not EXAMPLES_DIR.is_dir():
         return []
-    return sorted(
-        path for path in EXAMPLES_DIR.iterdir()
-        if path.is_dir() and (path / "tests").is_dir()
-    )
+    cases: list[Path] = []
+    for path in sorted(EXAMPLES_DIR.iterdir()):
+        if not path.is_dir():
+            continue
+        if (path / "tests").is_dir():
+            cases.append(path)
+            continue
+        for sub in sorted(path.iterdir()):
+            if sub.is_dir() and (sub / "tests").is_dir():
+                cases.append(sub)
+    return cases
+
+
+def is_hard_case(case: Path) -> bool:
+    """是否属于难例目录（`examples/hard/` 下）。"""
+    try:
+        return "hard" in case.relative_to(EXAMPLES_DIR).parts
+    except ValueError:
+        return False
 
 
 def pick_target(case: Path) -> str | None:
