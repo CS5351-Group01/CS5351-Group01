@@ -101,11 +101,18 @@ agent/        工具层：技能（ls/read/grep/write/find）、记忆、补丁�
 | C | 沙箱与测试执行 | `sandbox/` | 28 |
 | D | LLM 集成：客户端、Prompt、闭环 | `llm/` | 19 |
 | E | 前端 | `frontend/` | — |
-| F | 评估与集成验证（兼组长统筹） | `eval/` | 11 |
+| F | 评估与集成验证（兼组长统筹） | `eval/` | 15 |
 
 合计 **123 个测试**。
 
-【待填：为什么按目录分而不是按文件分？】
+为什么按目录分而不是按文件分：按文件分的话，两个人改同一个文件是常态，
+就必须靠「方法级归属 + 行级冲突」兜底，成本高得多；而按目录分，边界就是文件系统边界，
+一条 glob 规则就能说清。
+
+我们试过按文件分的版本——校验器要分析 AST、要判断每个方法是新增还是修改，
+规则复杂度是现在的三倍，还引入了「方法名改动算谁的」这类无解问题。
+目录分法的代价是「一人一层」，某层特别重的时候没人分担；
+但这个代价是显性的，比「每周调解俩人改同一个文件的冲突」便宜得多。
 
 ### 3.2 所有权机制（工程亮点）
 
@@ -128,7 +135,18 @@ tools/check_pr_ownership.py      校验器：路径 glob 匹配 + PR 作者核�
 
 `main` 上有 ruleset 兜底：必须走 PR、必须过 `Check ownership`、禁直推。
 
-【待填：贴一个真实的拦截报错，比如某次越权被 CI 挡住那行】
+真实被拦的一次（第 6 天，D 想把难例加进 `examples/`）：
+
+```text
+所有权检查失败：
+
+  - examples/hard_dedup/tests/test_utils.py 是组长的保留路径（`examples/**`），成员分支不能改。
+  - examples/hard_plural/calc.py 是组长的保留路径（`examples/**`），成员分支不能改。
+```
+
+他先撤销分支、再把文件发给组长，由组长统一加——这个处理是对的。
+而且这条规则确实救了一次：F 的测试会遍历整个 `examples/`，
+如果谁都能加，某人加了「修不好的用例」，别人的测试第二天会莫名变红，还查不出是谁加的。
 
 ### 3.3 这套机制的代价（诚实记录）
 
@@ -136,7 +154,19 @@ tools/check_pr_ownership.py      校验器：路径 glob 匹配 + PR 作者核�
 2. **`roles.json` 是单点**——写错一个路径，全组被误拦
 3. **前期投入大**——两三天基本花在建这套东西上，业务代码一行没写
 
-【待填：这笔投入值不值？给判断和理由】
+值不值：**值。**
+
+理由不是「防坏人」——同学之间不会互相破坏。省掉的是**每周的边界谈判**。
+
+没有这套东西的典型走势是：第 5 周有人为了跑通改了别人的文件，
+第 6 周别人也开始改，第 7 周组长开始看 diff 看不过来，
+第 9 周之后时间全花在扯皮上。
+
+这套机制把「这里是你的、那里是我的」从口头约定变成了一条命令的输出。
+出问题的时候不需要回忆「我当时说过什么」。
+
+代价也要认：前期进度被拖慢两三天；组长成了单点（`roles.json` 写错全组被拦）；
+而且组长自己绕行时得走 `ops/*` 分支，等于给自己开了一道后门。
 
 ---
 
@@ -221,7 +251,18 @@ tests/roles/f/    15    七个错例的回归（简单能修 + 难例修不了�
 给遗留行为加测试时，先写"锁定现状"的用例，注释写清「记录现状，不是期望行为」。
 真要改的时候它变红，就是在提醒同步更新预期。
 
-【待填：举 .exe 白名单那次的例子】
+例子：`.exe` 上传。
+
+第一版写的是「锁定现状」——后端没有扩展名白名单，`.exe` 也能建任务，
+测试断言 201，注释写清「以后加白名单这条会红，提醒同步改预期」。
+
+后来决定修：`storage.py` 加 `ALLOWED_SUFFIXES = {".py"}`，并且放在**读文件之前**判断
+（1MB 的 `.exe` 没必要先读进内存）。那条测试从
+`test_exe_extension_current_behavior` 改名成 `test_exe_extension_rejected`，
+断言从 201 改成 400，同时补一条 `.PY` 大写要放行的用例——否则白名单忘了 `.lower()`，
+功能会被误杀。
+
+特征化测试的价值就在这一步：它逼你先记录、再决定，而不是稀里糊涂把缺口留在那儿。
 
 **③ 反假绿**
 
@@ -229,7 +270,17 @@ tests/roles/f/    15    七个错例的回归（简单能修 + 难例修不了�
 改 `A→B` 可能解码出完全相同的字节。修法：改中间字符。
 **教训：测试要连跑 3 次全绿才算过。**
 
-【待填：贴一小段当时的失败输出】
+当时的失败输出：
+
+```text
+    def test_tampered_signature_rejected(client, auth_headers):
+        flipped = ("A" if signature[-1] != "A" else "B")
+        tampered = f"{head}.{body}.{signature[:-1]}{flipped}"
+>       assert response.status_code == 401
+E       assert 200 == 401
+```
+
+连跑 10 次：`PASS=9  FAIL=1`——同一份代码，一会儿红一会儿绿。
 
 ### 5.3 实际跑
 
@@ -241,7 +292,21 @@ tests/roles/f/    15    七个错例的回归（简单能修 + 难例修不了�
 123 passed
 ```
 
-【待填：换成真实输出截图】
+本地真实输出（2026-11-25）：
+
+```text
+123 passed, 1 warning in 44.03s
+```
+
+分角色：
+
+```text
+tests/roles/a   25 passed
+tests/roles/b   36 passed
+tests/roles/c   28 passed
+tests/roles/d   19 passed
+tests/roles/f   15 passed
+```
 
 ---
 
@@ -305,7 +370,8 @@ tests/roles/f/    15    七个错例的回归（简单能修 + 难例修不了�
 | 依赖模型输出格式 | 格式不对（没有代码块）就浪费一轮 | 重试 + 更强的输出约束 |
 | 只支持 Python | 检查器写死了 `py_compile` / `pytest` | 按语言抽象 test runner |
 
-【待填：再补 2~3 条真实遇到的限制，别写"时间不够"】
+有一点值得说：这六条里，前三条是「做得不够」，后三条是「结构上的取舍」。
+答辩时如果只讲后三条，会显得心虚；只讲前三条，会显得没想清楚。
 
 ---
 
@@ -350,7 +416,43 @@ python tools\check_pr_ownership.py --base origin/main --head HEAD --branch cours
 
 ## 附录 C：PR 记录
 
-【待填：从 GitHub 导出 PR 列表或截图】
+共 29 个 PR，其中 27 个合并、2 个关闭（一次是故意越权的验收测试，一次是没走完流程的草稿）。
+
+| # | 分支 | 作者 | 结果 |
+|---|---|---|---|
+| 1 | ops/warmup | vfanss | ✅ |
+| 2 | course/a | vfanss | 关闭（故意越权，用来验收 CI） |
+| 3 | ops/project-skeleton | vfanss | ✅ |
+| 4 | ops/quality-and-demo | vfanss | ✅ |
+| 5 | ops/quality-and-demo | vfanss | ✅ |
+| 6 | ops/roles | vfanss | ✅ |
+| 7 | ops/fix-sandbox-path | vfanss | ✅ |
+| 8 | course/e | Sorrow878 | ✅ |
+| 9 | ops/roles-fill | vfanss | ✅ |
+| 10 | ops/task-original | vfanss | ✅ |
+| 11 | ops/a-exe-guard | vfanss | ✅ |
+| 12 | ops/c-day3 | vfanss | ✅ |
+| 13 | course/e | Sorrow878 | ✅ |
+| 14 | ops/honest-eval | vfanss | ✅ |
+| 15 | course/b | hh-Yan | ✅ |
+| 16 | course/e | Sorrow878 | ✅ |
+| 17 | course/c | YangC929 | ✅ |
+| 18 | course/f | vfanss | ✅ |
+| 19 | course/a | Jy1372099 | ✅ |
+| 20 | course/d | tzy72611008 | ✅ |
+| 21 | ops/report-skeleton | vfanss | ✅ |
+| 22 | ops/fix-demo-diff | vfanss | ✅ |
+| 23 | ops/start-demo | vfanss | ✅ |
+| 24 | ops/day6 | vfanss | ✅ |
+| 25 | docs/d-report | tzy72611008 | 关闭（改的是组长保留路径） |
+| 26 | ops/hard-cases | vfanss | ✅ |
+| 27 | ops/d-docs | tzy72611008 | ✅ |
+| 28 | ops/day6-docs | vfanss | ✅ |
+| 29 | ops/demo-final | vfanss | ✅ |
+
+> **观察**：六个人里只有 4 个人真正开过 PR（Sorrow878 / hh-Yan / YangC929 / Jy1372099 / tzy72611008），
+> 其余大部分是通过 `ops/*` 由组长代合。这是本项目最该改进的流程问题：
+> 代码写了但没合，等于不存在；拖到最后一天会变成「六个分支一起冲突」。
 
 ---
 
