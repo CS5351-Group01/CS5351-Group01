@@ -16,6 +16,7 @@ from llm.client import FakeLLM, LLMClient
 from llm.prompts import build_fix_prompt
 from sandbox.runner import check_syntax, run_pytest
 from sandbox.workspace import SandboxWorkspace
+from sandbox.limits import TimeBudget  # 🌟 新增：导入 C 同学写的时间预算类
 
 SMOKE_TEST = """\
 import target  # noqa: F401
@@ -52,6 +53,7 @@ def repair_project(
     history: list[str] = []
     feedback: str | None = None
     last_code = ""
+    budget = TimeBudget(120)  # 🌟 新增：为整个任务设置 120 秒总预算
 
     with SandboxWorkspace(project_root) as workspace:
         last_code = workspace.read(target)
@@ -76,8 +78,19 @@ def repair_project(
             workspace.write(target, candidate)
             last_code = candidate
 
-            result = run_pytest(workspace.root, target=test_target)
+            # 🌟 修改：传入 budget
+            result = run_pytest(workspace.root, target=test_target, budget=budget)
             history.append(f"第 {iteration} 轮：{result.summary}")
+
+            # 🌟 新增：超时直接退出，不浪费后续轮次
+            if result.timed_out:
+                return RepairOutcome(
+                    success=False,
+                    iterations=iteration,
+                    final_code=candidate,
+                    message=result.failure_reason(),
+                    history=history,
+                )
 
             if result.passed:
                 return RepairOutcome(
@@ -114,6 +127,7 @@ def repair_source(
       2. 语法过了再跑一个「能被 import」的冒烟测试。
     """
     client = client or FakeLLM()
+    budget = TimeBudget(120)  # 🌟 新增：为整个任务设置 120 秒总预算
 
     with SandboxWorkspace() as workspace:
         workspace.write("target.py", source_code)
@@ -151,8 +165,20 @@ def repair_source(
                 feedback = syntax.as_feedback()
                 continue
 
-            result = run_pytest(workspace.root, target="tests/test_smoke.py", timeout=timeout)
+            # 🌟 修改：传入 budget
+            result = run_pytest(workspace.root, target="tests/test_smoke.py", timeout=timeout, budget=budget)
             history.append(f"第 {iteration} 轮：{result.summary}")
+
+            # 🌟 新增：超时直接退出
+            if result.timed_out:
+                return RepairOutcome(
+                    success=False,
+                    iterations=iteration,
+                    final_code=candidate,
+                    message=result.failure_reason(),
+                    history=history,
+                )
+
             if result.passed:
                 return RepairOutcome(
                     success=True,

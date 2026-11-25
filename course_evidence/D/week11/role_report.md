@@ -22,7 +22,7 @@ C 模块的 `sandbox/workspace.py` 存在 Windows 路径解析 Bug（`self.root`
 ## Day 3 实际跑了什么
 命令：`1..3 | ForEach-Object { .\.venv\Scripts\python.exe -m pytest tests/roles/d -q }`
 输出：
-（三次结果均为：`19 passed, 1 warning`，可以把你的截图贴在这里）
+（三次结果均为：`19 passed, 1 warning`）
 19 passed, 1 warning in 9.90s
 19 passed, 1 warning in 9.70s
 19 passed, 1 warning in 10.40s
